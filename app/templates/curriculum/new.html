@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}New Curriculum — The Curriculum{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <a href="/curriculums" class="text-gray-600 hover:text-gray-400 text-sm transition-colors">← Curriculums</a>
+</div>
+
+<div class="max-w-lg">
+  <h1 class="text-2xl font-bold text-white mb-2">New Curriculum</h1>
+  <p class="text-gray-500 text-sm mb-8">A curriculum is the habit you're tracking mastery in — like "Anthropic Interview Prep" or "Spanish".</p>
+
+  <form method="POST" class="space-y-6">
+    {{ form.hidden_tag() }}
+
+    <div>
+      {{ form.name.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+      {{ form.name(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors", placeholder="e.g. Anthropic Interview Prep") }}
+      {% for e in form.name.errors %}<p class="text-red-400 text-xs mt-1">{{ e }}</p>{% endfor %}
+    </div>
+
+    <div>
+      {{ form.description.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+      {{ form.description(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors resize-none h-24", placeholder="What is this? What does success look like? (optional)") }}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">Mastery Target (hours)</label>
+      <div class="flex flex-wrap gap-2 mb-3">
+        {% for hrs, label in [(100,'100h'),(500,'500h'),(1000,'1000h'),(7000,'7000h'),(10000,'10000h')] %}
+        <button type="button"
+                onclick="document.getElementById('mastery_h').value={{ hrs }}"
+                class="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:border-green-600 hover:text-green-400 transition-colors">
+          {{ label }}
+        </button>
+        {% endfor %}
+      </div>
+      {{ form.mastery_hours(id="mastery_h", class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors", placeholder="1000") }}
+      {% for e in form.mastery_hours.errors %}<p class="text-red-400 text-xs mt-1">{{ e }}</p>{% endfor %}
+    </div>
+
+    <div>
+      {{ form.color.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+      <div class="flex items-center gap-3">
+        <input type="color" name="{{ form.color.name }}" value="{{ form.color.data or '#6366f1' }}"
+               id="colorPicker" class="w-12 h-12 rounded-xl border border-gray-700 bg-gray-800 cursor-pointer p-1">
+        <div class="flex gap-2 flex-wrap">
+          {% for clr in ['#6366f1','#22c55e','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#ef4444','#14b8a6'] %}
+          <button type="button" onclick="document.getElementById('colorPicker').value='{{ clr }}'"
+                  class="w-7 h-7 rounded-full border-2 border-transparent hover:border-white transition-all"
+                  style="background:{{ clr }}"></button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3 pt-2">
+      <button type="submit" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-xl font-semibold transition-colors">
+        Create Curriculum
+      </button>
+      <a href="/curriculums" class="text-gray-400 hover:text-white px-4 py-2.5 rounded-xl transition-colors text-sm">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

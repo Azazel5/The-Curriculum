@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m venv .venv)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(FLASK_APP=run.py .venv/bin/flask db upgrade)",
+      "Bash(FLASK_APP=run.py .venv/bin/flask seed)",
+      "Bash(.venv/bin/python -c \"\nfrom app import create_app\napp = create_app\\(\\)\nwith app.test_client\\(\\) as c:\n    for route in ['/', '/curriculums', '/curriculums/1', '/log', '/insights', '/api/heatmap', '/api/items?curriculum_id=1']:\n        r = c.get\\(route\\)\n        print\\(f'{r.status_code}  {route}'\\)\n\")"
+    ]
+  }
+}

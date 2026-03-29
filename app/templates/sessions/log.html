@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Log Time — The Curriculum{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+  <h1 class="text-2xl font-bold text-white mb-2">Log Time</h1>
+  <p class="text-gray-500 text-sm mb-8">Every minute logged is progress towards mastery.</p>
+
+  {# Tab switcher #}
+  <div class="flex gap-1 bg-gray-900 rounded-xl p-1 mb-8 border border-gray-800">
+    <button id="tab-manual-btn" onclick="switchTab('manual')"
+            class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors bg-gray-800 text-white">
+      Manual Entry
+    </button>
+    <button id="tab-timer-btn" onclick="switchTab('timer')"
+            class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors text-gray-500">
+      Stopwatch Timer
+    </button>
+  </div>
+
+  {# ── Manual entry ──────────────────────────────────────────────────────── #}
+  <div id="panel-manual">
+    <form method="POST" action="/log" class="space-y-5">
+      {{ form.hidden_tag() }}
+
+      <div>
+        <label class="block text-sm font-medium text-gray-300 mb-2">Curriculum</label>
+        <select name="curriculum_id" id="manual-curriculum"
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors">
+          <option value="">— Select curriculum —</option>
+          {% for c in curricula %}
+          <option value="{{ c.id }}" {% if form.curriculum_id.data == c.id %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+          {% endfor %}
+        </select>
+        {% for e in form.curriculum_id.errors %}<p class="text-red-400 text-xs mt-1">{{ e }}</p>{% endfor %}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-300 mb-2">
+          Tag to item <span class="text-gray-600 font-normal">(optional)</span>
+        </label>
+        <select name="item_id" id="manual-item"
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-400 focus:outline-none focus:border-green-500 transition-colors">
+          <option value="0">— no specific item —</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Hours</label>
+          {{ form.hours(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-center text-lg font-mono focus:outline-none focus:border-green-500 transition-colors", placeholder="0", min="0") }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Minutes</label>
+          {{ form.minutes(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-center text-lg font-mono focus:outline-none focus:border-green-500 transition-colors", placeholder="0", min="0", max="59") }}
+        </div>
+      </div>
+
+      {# Quick duration buttons #}
+      <div class="flex flex-wrap gap-2">
+        {% for m, label in [(15,'15m'),(30,'30m'),(45,'45m'),(60,'1h'),(90,'1h 30m'),(120,'2h'),(180,'3h')] %}
+        <button type="button" onclick="setDuration({{ m }})"
+                class="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:border-green-600 hover:text-green-400 transition-colors font-mono">
+          {{ label }}
+        </button>
+        {% endfor %}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-300 mb-2">Date</label>
+        {{ form.logged_at(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors") }}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-300 mb-2">Note <span class="text-gray-600 font-normal">(optional)</span></label>
+        {{ form.note(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors", placeholder="What did you work on?") }}
+      </div>
+
+      <button type="submit"
+              class="w-full bg-green-600 hover:bg-green-500 text-white py-3.5 rounded-xl font-bold text-base transition-colors shadow-lg shadow-green-900/40">
+        Log It
+      </button>
+    </form>
+  </div>
+
+  {# ── Timer ─────────────────────────────────────────────────────────────── #}
+  <div id="panel-timer" class="hidden space-y-5">
+
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">Curriculum</label>
+      <select id="timer-curriculum"
+              class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors">
+        <option value="">— Select curriculum —</option>
+        {% for c in curricula %}
+        <option value="{{ c.id }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">Tag to item <span class="text-gray-600 font-normal">(optional)</span></label>
+      <select id="timer-item"
+              class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-400 focus:outline-none focus:border-green-500 transition-colors">
+        <option value="">— no specific item —</option>
+      </select>
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+      <div id="timer-display" class="text-6xl font-mono font-black text-white tracking-tight tabular-nums mb-6">
+        00:00:00
+      </div>
+      <div class="flex gap-3 justify-center">
+        <button id="timer-start" class="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-bold text-sm transition-colors">Start</button>
+        <button id="timer-pause" class="hidden bg-yellow-600 hover:bg-yellow-500 text-white px-8 py-3 rounded-xl font-bold text-sm transition-colors">Pause</button>
+        <button id="timer-stop" class="hidden bg-red-800 hover:bg-red-700 text-white px-8 py-3 rounded-xl font-bold text-sm transition-colors">Stop & Log</button>
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">Note <span class="text-gray-600 font-normal">(optional)</span></label>
+      <input id="timer-note" type="text"
+             class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
+             placeholder="What are you working on?">
+    </div>
+
+    <div id="timer-confirm" class="hidden bg-green-950 border border-green-800 text-green-300 px-4 py-3 rounded-xl text-sm font-medium"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function switchTab(tab) {
+    ['manual','timer'].forEach(t => {
+      document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
+      const btn = document.getElementById('tab-' + t + '-btn');
+      if (t === tab) { btn.classList.add('bg-gray-800','text-white'); btn.classList.remove('text-gray-500'); }
+      else           { btn.classList.remove('bg-gray-800','text-white'); btn.classList.add('text-gray-500'); }
+    });
+  }
+
+  function setDuration(mins) {
+    document.querySelector('[name="hours"]').value = Math.floor(mins / 60);
+    document.querySelector('[name="minutes"]').value = mins % 60;
+  }
+
+  function loadItems(curriculumId, targetSelect) {
+    if (!curriculumId) { targetSelect.innerHTML = '<option value="0">— no specific item —</option>'; return; }
+    fetch('/api/items?curriculum_id=' + curriculumId)
+      .then(r => r.json())
+      .then(data => {
+        targetSelect.innerHTML = '<option value="0">— no specific item —</option>';
+        data.forEach(i => {
+          const opt = document.createElement('option');
+          opt.value = i.id; opt.textContent = i.title;
+          targetSelect.appendChild(opt);
+        });
+      });
+  }
+
+  document.getElementById('manual-curriculum').addEventListener('change', function() {
+    loadItems(this.value, document.getElementById('manual-item'));
+  });
+  document.getElementById('timer-curriculum').addEventListener('change', function() {
+    loadItems(this.value, document.getElementById('timer-item'));
+  });
+
+  // Pre-load items if curriculum is pre-selected
+  const preSelected = document.querySelector('[name="curriculum_id"] option[selected]');
+  if (preSelected) loadItems(preSelected.value, document.getElementById('manual-item'));
+
+  // Auto-switch to timer tab if timer is running
+  (function() {
+    try {
+      const s = JSON.parse(localStorage.getItem('tc_timer'));
+      if (s && (s.running || s.paused_seconds > 0)) switchTab('timer');
+    } catch {}
+  })();
+</script>
+{% endblock %}

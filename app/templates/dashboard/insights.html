@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Insights — The Curriculum{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-2xl font-bold text-white">Insights</h1>
+    <p class="text-gray-500 text-sm mt-1">Data-driven view of where your time is going.</p>
+  </div>
+  <a href="/" class="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Dashboard</a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+    <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Daily Activity — last 30 days</h2>
+    <canvas id="dailyChart" height="160"></canvas>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+    <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Weekly Totals — last 12 weeks</h2>
+    <canvas id="weeklyChart" height="160"></canvas>
+  </div>
+</div>
+
+<div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-800">
+    <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest">Mastery Tracker</h2>
+  </div>
+  {% if curriculum_stats %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-800">
+          <th class="text-left px-6 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wider">Curriculum</th>
+          <th class="text-right px-4 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wider">Logged</th>
+          <th class="text-right px-4 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wider">Target</th>
+          <th class="text-left px-4 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wider w-40">Progress</th>
+          <th class="text-right px-4 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wider">h/day avg</th>
+          <th class="text-right px-6 py-3 text-xs text-gray-500 font-semibold uppercase tracking-wider">Est. completion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in curriculum_stats %}
+        {% set c = row.curriculum %}
+        <tr class="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+          <td class="px-6 py-4">
+            <div class="flex items-center gap-3">
+              <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:{{ c.color }}"></div>
+              <a href="/curriculums/{{ c.id }}" class="text-white hover:text-green-400 transition-colors font-medium">{{ c.name }}</a>
+            </div>
+          </td>
+          <td class="px-4 py-4 text-right font-mono text-gray-300">{{ '%.1f'|format(c.total_hours) }}h</td>
+          <td class="px-4 py-4 text-right font-mono text-gray-500">{{ c.mastery_hours|int }}h</td>
+          <td class="px-4 py-4">
+            <div class="flex items-center gap-2">
+              <div class="flex-1 bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                <div class="h-1.5 rounded-full progress-fill"
+                     style="width:{{ [c.progress_pct, 100]|min }}%; background:{{ c.progress_pct|pct_color }}"></div>
+              </div>
+              <span class="text-xs font-mono text-gray-500 w-10 text-right">{{ '%.0f'|format(c.progress_pct) }}%</span>
+            </div>
+          </td>
+          <td class="px-4 py-4 text-right font-mono text-gray-400">
+            {% if row.velocity_h > 0 %}{{ row.velocity_h }}{% else %}<span class="text-gray-700">—</span>{% endif %}
+          </td>
+          <td class="px-6 py-4 text-right text-gray-400">
+            {% if c.progress_pct >= 100 %}
+              <span class="text-green-400 font-semibold">Complete ✓</span>
+            {% elif row.projected %}
+              {% set days_away = (row.projected - today).days %}
+              <div>{{ row.projected.strftime('%b %d, %Y') }}</div>
+              <div class="text-xs text-gray-600">
+                {% if days_away < 30 %}{{ days_away }} days
+                {% elif days_away < 365 %}{{ (days_away // 30) }} months
+                {% else %}{{ (days_away // 365) }}y {{ ((days_away % 365) // 30) }}m{% endif %}
+              </div>
+            {% else %}
+              <span class="text-gray-700">No activity yet</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="px-6 py-12 text-center text-gray-600">
+    No curriculums yet. <a href="/curriculums/new" class="text-green-500 hover:text-green-400">Create one</a> to get started.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const CHART_OPTS = {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 8 } },
+      y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', font: { size: 10 },
+           callback: v => { const h = Math.floor(v/60); return h ? h+'h' : v+'m'; } } }
+    }
+  };
+  const daily = {{ daily | tojson }};
+  new Chart(document.getElementById('dailyChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels: daily.map(d => d.date), datasets: [{ data: daily.map(d => d.minutes), backgroundColor: '#16a34a', borderRadius: 3, borderSkipped: false }] },
+    options: CHART_OPTS
+  });
+  const weekly = {{ weekly | tojson }};
+  new Chart(document.getElementById('weeklyChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels: weekly.map(w => w.week), datasets: [{ data: weekly.map(w => w.minutes), backgroundColor: '#7c3aed', borderRadius: 3, borderSkipped: false }] },
+    options: CHART_OPTS
+  });
+</script>
+{% endblock %}

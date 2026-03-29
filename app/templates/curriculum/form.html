@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — The Curriculum{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <a href="{{ url_for('curriculum.list_curriculums') }}" class="text-gray-600 hover:text-gray-400 text-sm transition-colors">← Curriculums</a>
+</div>
+
+<div class="max-w-lg">
+  <h1 class="text-2xl font-bold text-white mb-8">{{ title }}</h1>
+
+  <form method="POST" class="space-y-6">
+    {{ form.hidden_tag() }}
+
+    <div>
+      {{ form.name.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+      {{ form.name(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors", placeholder="e.g. Anthropic Interview Prep") }}
+      {% for e in form.name.errors %}
+      <p class="text-red-400 text-xs mt-1">{{ e }}</p>
+      {% endfor %}
+    </div>
+
+    <div>
+      {{ form.description.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+      {{ form.description(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors resize-none h-24", placeholder="What are you building mastery in? (optional)") }}
+    </div>
+
+    <div>
+      {{ form.color.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+      <div class="flex items-center gap-3">
+        <input type="color" name="{{ form.color.name }}" value="{{ form.color.data or '#6366f1' }}"
+               id="colorPicker"
+               class="w-12 h-12 rounded-xl border border-gray-700 bg-gray-800 cursor-pointer p-1">
+        <div class="flex gap-2 flex-wrap">
+          {% for clr in ['#6366f1','#22c55e','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#ef4444','#14b8a6'] %}
+          <button type="button" onclick="document.getElementById('colorPicker').value='{{ clr }}'"
+                  class="w-7 h-7 rounded-full border-2 border-transparent hover:border-white transition-all"
+                  style="background:{{ clr }}" title="{{ clr }}"></button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3 pt-2">
+      <button type="submit"
+              class="bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-xl font-semibold transition-colors">
+        {% if curriculum %}Save Changes{% else %}Create Curriculum{% endif %}
+      </button>
+      <a href="{{ url_for('curriculum.list_curriculums') }}"
+         class="text-gray-400 hover:text-white px-4 py-2.5 rounded-xl transition-colors text-sm">
+        Cancel
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

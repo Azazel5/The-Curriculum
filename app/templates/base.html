@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}The Curriculum{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    .progress-fill { transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen antialiased">
+
+  <!-- Nav -->
+  <nav class="sticky top-0 z-40 border-b border-gray-800 bg-gray-950/95 backdrop-blur-sm">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 font-bold text-lg tracking-tight">
+        <span class="text-green-400">◉</span>
+        <span class="text-white">The Curriculum</span>
+      </a>
+      <div class="flex items-center gap-1">
+        <a href="/" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Dashboard</a>
+        <a href="/curriculums" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Curriculums</a>
+        <a href="/insights" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Insights</a>
+        <a href="/settings" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Settings</a>
+        <div class="w-px h-4 bg-gray-700 mx-2"></div>
+        <a href="/log" class="bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition-colors">+ Log Time</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Timer floating pill (shown by timer.js when active) -->
+  <div id="nav-timer-indicator"
+       class="hidden fixed top-4 right-4 z-50 bg-gray-900 border border-green-800 text-green-400 text-xs px-3 py-2 rounded-full items-center gap-2 shadow-xl">
+    <span class="relative flex h-2 w-2">
+      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+      <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+    </span>
+    <span id="nav-timer-display" class="font-mono font-medium">00:00:00</span>
+    <a href="/log" class="text-green-300 hover:text-white ml-1 transition-colors">→</a>
+  </div>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="fixed top-16 inset-x-0 z-50 flex flex-col items-center gap-2 pointer-events-none px-4 pt-2">
+    {% for category, message in messages %}
+    <div class="flash-msg pointer-events-auto flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium shadow-2xl
+      {% if category == 'error' %}bg-red-950 border border-red-800 text-red-300{% else %}bg-gray-900 border border-green-800 text-green-300{% endif %}">
+      {% if category == 'error' %}⚠ {{ message }}{% else %}✓ {{ message }}{% endif %}
+      <button onclick="this.parentElement.remove()" class="ml-1 opacity-40 hover:opacity-100 text-base leading-none">×</button>
+    </div>
+    {% endfor %}
+  </div>
+  <script>
+    setTimeout(() => {
+      document.querySelectorAll('.flash-msg').forEach(el => {
+        el.style.transition = 'opacity .3s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      });
+    }, 4000);
+  </script>
+  {% endif %}
+  {% endwith %}
+
+  <!-- Page content -->
+  <main class="max-w-6xl mx-auto px-6 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{{ url_for('static', filename='js/heatmap.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/timer.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

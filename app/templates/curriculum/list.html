@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Curriculums — The Curriculum{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-2xl font-bold text-white">Curriculums</h1>
+    <p class="text-gray-500 text-sm mt-1">Each curriculum is a habit you're building mastery in.</p>
+  </div>
+  <a href="/curriculums/new" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors">
+    + New Curriculum
+  </a>
+</div>
+
+{% if curricula %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+  {% for c in curricula %}
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-colors">
+    <div class="flex items-start justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-4 h-4 rounded-full flex-shrink-0" style="background:{{ c.color }}"></div>
+        <div>
+          <h2 class="font-semibold text-white">{{ c.name }}</h2>
+          {% if c.description %}
+          <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">{{ c.description }}</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="flex gap-1 ml-2 flex-shrink-0">
+        <form method="POST" action="/curriculums/{{ c.id }}/delete" onsubmit="return confirm('Archive?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="text-gray-600 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-gray-800 transition-colors">Archive</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="flex justify-between text-xs text-gray-500 mb-1.5">
+        <span>{{ '%.1f'|format(c.total_hours) }}h logged</span>
+        <span>{{ c.mastery_hours|int }}h target</span>
+      </div>
+      <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+        <div class="h-2 rounded-full progress-fill"
+             style="width:{{ [c.progress_pct, 100]|min }}%; background:{{ c.color }}"></div>
+      </div>
+      <div class="flex justify-between mt-1 text-xs">
+        <span class="font-semibold" style="color:{{ c.progress_pct|pct_color }}">{{ '%.1f'|format(c.progress_pct) }}%</span>
+        <span class="text-gray-600">{{ c.completed_items_count }}/{{ c.total_items_count }} items done</span>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between">
+      <a href="/log?curriculum={{ c.id }}"
+         class="text-xs text-green-500 hover:text-green-400 transition-colors font-medium">+ Log time</a>
+      <a href="/curriculums/{{ c.id }}"
+         class="text-green-500 hover:text-green-400 text-sm font-medium transition-colors">Open →</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-gray-900 border border-dashed border-gray-700 rounded-2xl p-16 text-center">
+  <div class="text-5xl mb-4">🎯</div>
+  <p class="text-gray-400 font-medium mb-2">No curriculums yet.</p>
+  <p class="text-gray-600 text-sm mb-6">Create a curriculum for each major goal you want to build mastery in.</p>
+  <a href="/curriculums/new" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-full font-semibold text-sm transition-colors">
+    Create your first
+  </a>
+</div>
+{% endif %}
+{% endblock %}
