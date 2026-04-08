@@ -17,19 +17,28 @@ def heatmap_curriculum(curriculum_id):
     return jsonify(get_heatmap_data(curriculum_id=curriculum_id))
 
 
+def _curriculum_requires_item(cid):
+    return (
+        CurriculumItem.query
+        .filter_by(curriculum_id=cid, deleted=False)
+        .first()
+        is not None
+    )
+
+
 @api_bp.route('/items')
 def items():
-    """Return items for a curriculum (for dynamic dropdowns)."""
+    """Return items for a curriculum (for dynamic dropdowns). Progress is time-based; all items stay listed."""
     curriculum_id = request.args.get('curriculum_id', type=int)
     if not curriculum_id:
         return jsonify([])
-    items = (
+    rows = (
         CurriculumItem.query
-        .filter_by(curriculum_id=curriculum_id, deleted=False, completed=False)
+        .filter_by(curriculum_id=curriculum_id, deleted=False)
         .order_by(CurriculumItem.sort_order, CurriculumItem.id)
         .all()
     )
-    return jsonify([{'id': i.id, 'title': i.title} for i in items])
+    return jsonify([{'id': i.id, 'title': i.title} for i in rows])
 
 
 @api_bp.route('/sessions/stop', methods=['POST'])
@@ -38,12 +47,31 @@ def stop_timer():
     curriculum_id = data.get('curriculum_id')
     duration_minutes = data.get('duration_minutes')
     note = data.get('note', '') or None
-    item_id = data.get('item_id') or None
+    item_id = data.get('item_id')
     client_date = data.get('date')
 
-    curriculum = Curriculum.query.get(curriculum_id) if curriculum_id else None
-    if not curriculum or not duration_minutes or int(duration_minutes) <= 0:
+    if not duration_minutes or int(duration_minutes) <= 0:
         return jsonify({'error': 'Invalid data'}), 400
+
+    item = None
+    if item_id:
+        item = CurriculumItem.query.filter_by(id=int(item_id), deleted=False).first()
+        if not item:
+            return jsonify({'error': 'Invalid item'}), 400
+        curriculum = Curriculum.query.filter_by(id=item.curriculum_id, archived=False).first()
+        if not curriculum:
+            return jsonify({'error': 'Invalid curriculum'}), 400
+        if curriculum_id and int(curriculum_id) != curriculum.id:
+            return jsonify({'error': 'Item does not match curriculum'}), 400
+        curriculum_id = curriculum.id
+        item_id = item.id
+    else:
+        curriculum = Curriculum.query.get(curriculum_id) if curriculum_id else None
+        if not curriculum:
+            return jsonify({'error': 'Invalid data'}), 400
+        if _curriculum_requires_item(curriculum.id):
+            return jsonify({'error': 'Select an item for this curriculum'}), 400
+        item_id = None
 
     try:
         logged_at = date.fromisoformat(client_date) if client_date else date.today()
@@ -56,7 +84,7 @@ def stop_timer():
         duration_minutes=int(duration_minutes),
         logged_at=logged_at,
         note=note,
-        source='timer'
+        source='timer',
     )
     db.session.add(s)
     db.session.commit()
@@ -65,7 +93,9 @@ def stop_timer():
         'status': 'ok',
         'session_id': s.id,
         'total_hours': round(curriculum.total_hours, 2),
-        'progress_pct': round(curriculum.progress_pct, 1)
+        'progress_pct': round(curriculum.progress_pct, 1),
+        'curriculum_id': curriculum.id,
+        'item_id': item_id,
     })
 
 

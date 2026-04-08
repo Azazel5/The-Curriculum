@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import date
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from app import db
 from app.models import Curriculum, CurriculumItem, Session, Project
@@ -88,6 +88,8 @@ def curriculum_detail(id):
     velocity = get_velocity(c)
     projected = get_projected_completion(c)
 
+    highlight_item_id = request.args.get('log_item', type=int)
+
     return render_template(
         'curriculum/detail.html',
         curriculum=c,
@@ -98,6 +100,7 @@ def curriculum_detail(id):
         velocity=velocity,
         projected=projected,
         today=today,
+        highlight_item_id=highlight_item_id,
     )
 
 
@@ -167,7 +170,10 @@ def add_item(id):
         except ValueError:
             pass
 
-    # Max sort_order + 1
+    kind = request.form.get('item_kind', CurriculumItem.KIND_ONE_SHOT)
+    if kind not in (CurriculumItem.KIND_ONE_SHOT, CurriculumItem.KIND_DAILY):
+        kind = CurriculumItem.KIND_ONE_SHOT
+
     max_order = db.session.query(db.func.max(CurriculumItem.sort_order))\
         .filter_by(curriculum_id=id).scalar() or 0
 
@@ -177,18 +183,10 @@ def add_item(id):
         description=request.form.get('description', '').strip() or None,
         deadline=deadline,
         hours_target=hours_target,
+        item_kind=kind,
         sort_order=max_order + 1
     )
     db.session.add(item)
-    db.session.commit()
-    return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
-
-
-@curriculum_bp.route('/curriculums/<int:id>/items/<int:iid>/complete', methods=['POST'])
-def toggle_item(id, iid):
-    item = CurriculumItem.query.filter_by(id=iid, curriculum_id=id, deleted=False).first_or_404()
-    item.completed = not item.completed
-    item.completed_at = datetime.utcnow() if item.completed else None
     db.session.commit()
     return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
 
@@ -209,6 +207,10 @@ def edit_item(id, iid):
         item.hours_target = float(hours_str) if hours_str else None
     except ValueError:
         pass
+
+    kind = request.form.get('item_kind', item.item_kind)
+    if kind in (CurriculumItem.KIND_ONE_SHOT, CurriculumItem.KIND_DAILY):
+        item.item_kind = kind
 
     db.session.commit()
     return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')

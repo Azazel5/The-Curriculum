@@ -89,7 +89,7 @@
       </div>
 
       {# Items summary — show up to 4 incomplete items #}
-      {% set pending_items = c.active_items | selectattr('completed', 'false') | list %}
+      {% set pending_items = c.active_items | selectattr('is_pending_in_roadmap') | list %}
       {% if pending_items %}
       <div class="space-y-1 mb-2">
         {% for item in pending_items[:4] %}
@@ -113,7 +113,7 @@
       {% endif %}
 
       <div class="flex items-center justify-between mt-1">
-        <span class="text-xs text-gray-600">{{ c.completed_items_count }}/{{ c.total_items_count }} items done</span>
+        <span class="text-xs text-gray-600">{{ c.completed_items_count }}/{{ c.total_items_count }} items at goal</span>
         <div class="flex gap-3">
           <a href="/log?curriculum={{ c.id }}" class="text-xs text-green-600 hover:text-green-400 transition-colors font-medium">+ Log</a>
           <a href="/curriculums/{{ c.id }}" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Open →</a>

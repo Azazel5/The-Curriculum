@@ -88,6 +88,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (startBtn) startBtn.addEventListener('click', () => {
     if (!currSel || !currSel.value) { alert('Select a curriculum first.'); return; }
+    if (itemSel) {
+      const opts = itemSel.querySelectorAll('option');
+      const onlyCurriculum = opts.length === 1 && opts[0].value === '0';
+      const needsItem = opts.length > 0 && !onlyCurriculum;
+      if (needsItem && (!itemSel.value || itemSel.value === '')) {
+        alert('Select a roadmap item. This curriculum tracks time per item.');
+        return;
+      }
+    }
     const prev = timerGetState();
     const resumeSecs = (prev && !prev.running) ? (prev.paused_seconds || 0) : 0;
     timerSetState({
@@ -116,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!state) return;
     const elapsed = timerElapsed();
     const duration_minutes = Math.max(1, Math.round(elapsed / 60));
-    if (!confirm(`Log ${fmtTime(elapsed)} (${duration_minutes} min) for ${state.curriculum_name}?`)) return;
+    if (!confirm(`Log ${fmtTime(elapsed)} (~${duration_minutes} min) for ${state.curriculum_name}?`)) return;
     clearInterval(tickInterval);
     try {
       const res = await fetch('/api/sessions/stop', {

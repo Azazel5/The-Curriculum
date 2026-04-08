@@ -38,11 +38,20 @@ class CurriculumItemForm(FlaskForm):
     description = TextAreaField('Description', validators=[Optional()])
     deadline = DateField('Deadline', validators=[Optional()])
     hours_target = FloatField('Hours target (optional)', validators=[Optional(), NumberRange(min=0)])
+    item_kind = SelectField(
+        'Item type',
+        choices=[
+            ('one_shot', 'One-time (total hours goal)'),
+            ('daily', 'Daily (repeats each day)'),
+        ],
+        default='one_shot',
+        validators=[DataRequired()],
+    )
 
 
 class SessionForm(FlaskForm):
     curriculum_id = SelectField('Curriculum', coerce=int, validators=[DataRequired()])
-    item_id = SelectField('Tag to item (optional)', coerce=int, validators=[Optional()])
+    item_id = SelectField('Item', coerce=int, validators=[Optional()])
     hours = IntegerField('Hours', validators=[Optional(), NumberRange(min=0)], default=0)
     minutes = IntegerField('Minutes', validators=[Optional(), NumberRange(min=0, max=59)], default=0)
     logged_at = DateField('Date', validators=[Optional()], default=date.today)

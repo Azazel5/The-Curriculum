@@ -22,6 +22,21 @@ class Project(db.Model):
 
     curricula = db.relationship('Curriculum', backref='project', lazy='dynamic')
 
+    @property
+    def total_minutes(self):
+        """All session minutes on curricula belonging to this project."""
+        result = (
+            db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
+            .join(Curriculum, Session.curriculum_id == Curriculum.id)
+            .filter(Curriculum.project_id == self.id)
+            .scalar()
+        )
+        return result or 0
+
+    @property
+    def total_hours(self):
+        return self.total_minutes / 60.0
+
 
 class Curriculum(db.Model):
     """The habit itself — e.g. 'Anthropic Interview Prep'. Time is tracked at this level."""
@@ -72,7 +87,9 @@ class Curriculum(db.Model):
 
     @property
     def completed_items_count(self):
-        return self.items.filter_by(completed=True, deleted=False).count()
+        today = date.today()
+        items = self.items.filter_by(deleted=False).all()
+        return sum(1 for i in items if i.is_complete_for_stats(today))
 
     @property
     def total_items_count(self):
@@ -80,19 +97,20 @@ class Curriculum(db.Model):
 
 
 class CurriculumItem(db.Model):
-    """
-    A sub-task / milestone inside a curriculum.
-    Think: 'Read Attention paper', 'Do 10 mock interviews', 'Build toy transformer'.
-    Items are a roadmap — they can be checked off. Time is NOT tracked per item by default,
-    but sessions can optionally be tagged to an item.
-    """
+    """Roadmap row under a curriculum. Progress and “done” come from logged sessions only."""
+
     __tablename__ = 'curriculum_item'
+    KIND_ONE_SHOT = 'one_shot'
+    KIND_DAILY = 'daily'
+
     id = db.Column(db.Integer, primary_key=True)
     curriculum_id = db.Column(db.Integer, db.ForeignKey('curriculum.id'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     deadline = db.Column(db.Date, nullable=True)
-    hours_target = db.Column(db.Float, nullable=True)  # optional per-item goal
+    # one_shot: total hours goal; daily: hours to log per calendar day to count “done today”
+    hours_target = db.Column(db.Float, nullable=True)
+    item_kind = db.Column(db.String(20), nullable=False, default=KIND_ONE_SHOT)
     completed = db.Column(db.Boolean, default=False)
     completed_at = db.Column(db.DateTime, nullable=True)
     sort_order = db.Column(db.Integer, default=0)
@@ -101,7 +119,6 @@ class CurriculumItem(db.Model):
 
     @property
     def hours_logged(self):
-        """Minutes logged in sessions tagged to this item."""
         result = (
             db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
             .filter(Session.item_id == self.id)
@@ -109,10 +126,54 @@ class CurriculumItem(db.Model):
         )
         return (result or 0) / 60.0
 
+    def minutes_logged_on(self, d):
+        result = (
+            db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
+            .filter(Session.item_id == self.id, Session.logged_at == d)
+            .scalar()
+        )
+        return int(result or 0)
+
+    @property
+    def hours_logged_today(self):
+        return self.minutes_logged_on(date.today()) / 60.0
+
+    def is_complete_for_stats(self, today=None):
+        """Whether this item counts toward curriculum “items done” for ``today``."""
+        today = today or date.today()
+        if self.item_kind == self.KIND_DAILY:
+            if not self.hours_target or self.hours_target <= 0:
+                return False
+            return self.minutes_logged_on(today) >= self.hours_target * 60
+        if not self.hours_target or self.hours_target <= 0:
+            return False
+        return self.hours_logged >= self.hours_target
+
+    @property
+    def is_one_shot_done(self):
+        if self.item_kind != self.KIND_ONE_SHOT:
+            return False
+        return self.is_complete_for_stats()
+
+    @property
+    def is_daily_done_today(self):
+        if self.item_kind != self.KIND_DAILY:
+            return False
+        return self.is_complete_for_stats(date.today())
+
+    @property
+    def is_pending_in_roadmap(self):
+        if self.deleted:
+            return False
+        return not self.is_complete_for_stats()
+
     @property
     def deadline_status(self):
         """Returns 'overdue', 'soon', 'upcoming', 'done', or None."""
-        if self.completed:
+        if self.item_kind == self.KIND_DAILY:
+            if self.is_daily_done_today:
+                return 'done'
+        elif self.is_one_shot_done:
             return 'done'
         if not self.deadline:
             return None
@@ -127,7 +188,7 @@ class CurriculumItem(db.Model):
 
 
 class Session(db.Model):
-    """Time logged against a curriculum (the habit). Optionally tagged to an item."""
+    """Time logged against a curriculum; tagged to a roadmap item when the curriculum has items."""
     __tablename__ = 'session'
     id = db.Column(db.Integer, primary_key=True)
     curriculum_id = db.Column(db.Integer, db.ForeignKey('curriculum.id'), nullable=False)

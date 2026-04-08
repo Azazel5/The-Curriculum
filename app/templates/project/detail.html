@@ -17,6 +17,12 @@
       <p class="text-sm text-gray-400 mt-2">{{ project.description }}</p>
       {% endif %}
     </div>
+    <div class="mt-4 pt-4 border-t border-gray-800 flex flex-wrap gap-6">
+      <div>
+        <div class="text-lg font-bold font-mono text-white">{{ '%.1f'|format(project.total_hours) }}h</div>
+        <div class="text-xs text-gray-500">logged (all curricula)</div>
+      </div>
+    </div>
   </div>
 </div>
 

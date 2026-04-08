@@ -4,7 +4,7 @@
 {% block content %}
 <div class="max-w-xl mx-auto">
   <h1 class="text-2xl font-bold text-white mb-2">Log Time</h1>
-  <p class="text-gray-500 text-sm mb-8">Every minute logged is progress towards mastery.</p>
+  <p class="text-gray-500 text-sm mb-6">All progress comes from logged time. If a curriculum has roadmap items, you must tag each session to an item.</p>
 
   {# Tab switcher #}
   <div class="flex gap-1 bg-gray-900 rounded-xl p-1 mb-8 border border-gray-800">
@@ -39,11 +39,11 @@
 
       <div>
         <label class="block text-sm font-medium text-gray-300 mb-2">
-          Tag to item <span class="text-gray-600 font-normal">(optional)</span>
+          Item <span class="text-gray-600 font-normal text-xs">(required when this curriculum has items)</span>
         </label>
         <select name="item_id" id="manual-item"
                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-400 focus:outline-none focus:border-green-500 transition-colors">
-          <option value="0">— no specific item —</option>
+          <option value="">— choose curriculum first —</option>
         </select>
       </div>
 
@@ -100,10 +100,10 @@
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-300 mb-2">Tag to item <span class="text-gray-600 font-normal">(optional)</span></label>
+      <label class="block text-sm font-medium text-gray-300 mb-2">Item <span class="text-gray-600 font-normal text-xs">(required when curriculum has items)</span></label>
       <select id="timer-item"
               class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-400 focus:outline-none focus:border-green-500 transition-colors">
-        <option value="">— no specific item —</option>
+        <option value="">— choose curriculum first —</option>
       </select>
     </div>
 
@@ -147,11 +147,18 @@
   }
 
   function loadItems(curriculumId, targetSelect) {
-    if (!curriculumId) { targetSelect.innerHTML = '<option value="0">— no specific item —</option>'; return; }
-    fetch('/api/items?curriculum_id=' + curriculumId)
+    if (!curriculumId) {
+      targetSelect.innerHTML = '<option value="">— choose curriculum first —</option>';
+      return Promise.resolve();
+    }
+    return fetch('/api/items?curriculum_id=' + curriculumId)
       .then(r => r.json())
       .then(data => {
-        targetSelect.innerHTML = '<option value="0">— no specific item —</option>';
+        if (!data.length) {
+          targetSelect.innerHTML = '<option value="0">— no items: log to curriculum only —</option>';
+          return;
+        }
+        targetSelect.innerHTML = '';
         data.forEach(i => {
           const opt = document.createElement('option');
           opt.value = i.id; opt.textContent = i.title;
@@ -160,6 +167,8 @@
       });
   }
 
+  const prefillItemId = {{ form.item_id.data | tojson }};
+
   document.getElementById('manual-curriculum').addEventListener('change', function() {
     loadItems(this.value, document.getElementById('manual-item'));
   });
@@ -167,14 +176,25 @@
     loadItems(this.value, document.getElementById('timer-item'));
   });
 
-  // Pre-load items if curriculum is pre-selected
-  const preSelected = document.querySelector('[name="curriculum_id"] option[selected]');
-  if (preSelected) loadItems(preSelected.value, document.getElementById('manual-item'));
+  const preSelected = document.querySelector('#manual-curriculum option:checked');
+  const manualItemSel = document.getElementById('manual-item');
+  if (preSelected && preSelected.value && manualItemSel) {
+    loadItems(preSelected.value, manualItemSel).then(() => {
+      if (prefillItemId) manualItemSel.value = String(prefillItemId);
+    });
+  }
 
-  // Auto-switch to timer tab if timer is running
   (function() {
     try {
       const s = JSON.parse(localStorage.getItem('tc_timer'));
+      const tCurr = document.getElementById('timer-curriculum');
+      const tItem = document.getElementById('timer-item');
+      if (s && s.curriculum_id && tCurr && tItem) {
+        tCurr.value = String(s.curriculum_id);
+        loadItems(s.curriculum_id, tItem).then(() => {
+          if (s.item_id) tItem.value = String(s.item_id);
+        });
+      }
       if (s && (s.running || s.paused_seconds > 0)) switchTab('timer');
     } catch {}
   })();

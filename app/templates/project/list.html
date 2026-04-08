@@ -25,7 +25,10 @@
         {% endif %}
       </div>
     </div>
-    <div class="text-xs text-gray-500">{{ project.curricula.count() }} curricula</div>
+    <div class="text-xs text-gray-500 flex flex-wrap gap-3">
+      <span>{{ project.curricula.count() }} curricula</span>
+      <span class="font-mono text-gray-400">{{ '%.1f'|format(project.total_hours) }}h logged</span>
+    </div>
   </div>
   {% endfor %}
 </div>
