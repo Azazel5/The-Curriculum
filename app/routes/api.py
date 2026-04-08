@@ -19,10 +19,16 @@ def heatmap_curriculum(curriculum_id):
     return jsonify(get_heatmap_data(curriculum_id=curriculum_id))
 
 
-def _curriculum_requires_item(cid):
+def _curriculum_requires_time_item(cid):
+    """Timer / API must tag sessions when the curriculum has daily time-target rows."""
     return (
         CurriculumItem.query
-        .filter_by(curriculum_id=cid, deleted=False)
+        .filter(
+            CurriculumItem.curriculum_id == cid,
+            CurriculumItem.deleted.is_(False),
+            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
+            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
+        )
         .first()
         is not None
     )
@@ -40,7 +46,7 @@ def items():
         .order_by(CurriculumItem.sort_order, CurriculumItem.id)
         .all()
     )
-    return jsonify([{'id': i.id, 'title': i.title} for i in rows])
+    return jsonify([{'id': i.id, 'title': i.title} for i in rows if i.accepts_time_logging()])
 
 
 @api_bp.route('/sessions/stop', methods=['POST'])
@@ -58,7 +64,7 @@ def stop_timer():
     item = None
     if item_id:
         item = CurriculumItem.query.filter_by(id=int(item_id), deleted=False).first()
-        if not item:
+        if not item or not item.accepts_time_logging():
             return jsonify({'error': 'Invalid item'}), 400
         curriculum = Curriculum.query.filter_by(id=item.curriculum_id, archived=False).first()
         if not curriculum:
@@ -71,8 +77,8 @@ def stop_timer():
         curriculum = Curriculum.query.get(curriculum_id) if curriculum_id else None
         if not curriculum:
             return jsonify({'error': 'Invalid data'}), 400
-        if _curriculum_requires_item(curriculum.id):
-            return jsonify({'error': 'Select an item for this curriculum'}), 400
+        if _curriculum_requires_time_item(curriculum.id):
+            return jsonify({'error': 'Select a time-tracked item for this curriculum'}), 400
         item_id = None
 
     try:

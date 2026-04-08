@@ -84,20 +84,35 @@ function renderHeatmap(containerId, data) {
             const cell = document.createElement('div');
             const inRange = day >= startDate && day <= endDate;
             const dateStr = toISO(day);
-            const mins = inRange ? (data[dateStr] || 0) : 0;
+            const raw = inRange ? data[dateStr] : undefined;
+            let mins = 0;
+            let activityOnly = false;
+            if (typeof raw === 'number') {
+                mins = raw;
+                activityOnly = false;
+            } else if (raw && typeof raw === 'object') {
+                mins = raw.m != null ? raw.m : 0;
+                activityOnly = !!raw.a;
+            }
+            const levelMins = activityOnly && mins === 0 ? 1 : mins;
 
             cell.style.cssText = [
                 'width:11px', 'height:11px', 'border-radius:2px', 'flex-shrink:0',
-                `background:${inRange ? cellColor(mins) : 'transparent'}`,
+                `background:${inRange ? cellColor(levelMins) : 'transparent'}`,
                 inRange ? 'cursor:pointer' : ''
             ].join(';');
 
             if (inRange) {
                 const h = Math.floor(mins / 60);
                 const m = mins % 60;
-                const timeStr = mins > 0
-                    ? (h > 0 ? `${h}h ${m}m` : `${m}m`)
-                    : 'No sessions';
+                let timeStr;
+                if (activityOnly && mins === 0) {
+                    timeStr = 'Activity (check-in / done)';
+                } else if (mins > 0) {
+                    timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                } else {
+                    timeStr = 'No activity';
+                }
                 cell.title = `${dateStr}: ${timeStr}`;
             }
 

@@ -57,6 +57,13 @@ The app is built so you can spot **slacking or blind spots** without hand-waving
 
 **Time** answers “how much did I invest?” **Checkboxes** answer “did I close the loop I care about?”—especially for **daily** habits.
 
+### Daily items: presence vs time target
+
+- **Presence (manual):** You tap the circle to mark “done today.” Resets each calendar day.
+- **Time target (automatic):** You set **minutes required today on that item**. The checkmark turns on when **today’s sessions tagged to that item** sum to **≥ that target** (manual log or timer). You cannot manually toggle the check; log time to complete.
+
+One-time items stay **manual** complete only.
+
 ---
 
 ## A lesson in humility: what 1000 hours really is
@@ -189,6 +196,12 @@ flask db upgrade
 | `FLASK_APP` | For CLI / Release | `app:create_app` for `flask db upgrade`. |
 
 Local development ignores `RENDER` and uses SQLite unless `DATABASE_URL` is set.
+
+### Redeploy after pulling new code
+
+1. **Local:** `git pull`, then `export FLASK_APP=app:create_app` and `flask db upgrade` (uses your local DB or set `DATABASE_URL` for Neon).
+2. **Render:** Push to the connected branch → Render rebuilds. If you added migrations, ensure **Release Command** is still `flask db upgrade` (or run that once against Neon from your laptop with the same `DATABASE_URL` as production).
+3. **Neon:** no change unless you rotate credentials.
 
 ---
 

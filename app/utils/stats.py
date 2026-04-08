@@ -1,7 +1,13 @@
 from datetime import date, timedelta
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
 from app import db
-from app.models import Session, Curriculum, CurriculumItem
+from app.models import (
+    Session,
+    Curriculum,
+    CurriculumItem,
+    ItemActivityDay,
+    curriculum_scopes_mastery_to_time_items,
+)
 
 
 def _apply_scope(q, project_id=None, curriculum_id=None):
@@ -30,7 +36,19 @@ def _curriculum_has_active_items(curriculum_id):
     )
 
 
-def _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only):
+def _mastery_session_filter():
+    """Sessions that count toward mastery when curriculum scopes to time-target dailies."""
+    return or_(
+        Session.item_id.is_(None),
+        and_(
+            CurriculumItem.deleted.is_(False),
+            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
+            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
+        ),
+    )
+
+
+def _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, mastery_scoped=False):
     """Total minutes and count of distinct days with sessions in [start, end]."""
     filters = [
         Session.curriculum_id == curriculum_id,
@@ -40,38 +58,109 @@ def _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only):
     if item_tagged_only:
         filters.append(Session.item_id.isnot(None))
 
-    total = (
-        db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
-        .filter(and_(*filters))
-        .scalar()
-    )
+    q = db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0)).filter(and_(*filters))
+    if mastery_scoped and curriculum_scopes_mastery_to_time_items(curriculum_id):
+        q = q.outerjoin(CurriculumItem, Session.item_id == CurriculumItem.id).filter(_mastery_session_filter())
+
+    total = q.scalar()
     total = total or 0
 
-    active_days = (
-        db.session.query(func.count(func.distinct(Session.logged_at)))
-        .filter(and_(*filters))
-        .scalar()
-    )
+    days_q = db.session.query(func.count(func.distinct(Session.logged_at))).filter(and_(*filters))
+    if mastery_scoped and curriculum_scopes_mastery_to_time_items(curriculum_id):
+        days_q = days_q.outerjoin(CurriculumItem, Session.item_id == CurriculumItem.id).filter(_mastery_session_filter())
+
+    active_days = days_q.scalar()
     active_days = active_days or 0
     return total, active_days
 
 
+def _sum_mastery_minutes_and_days(curriculum_id, start, end, item_tagged_only):
+    """Like _sum_and_active_days_minutes but always applies mastery session filter when applicable."""
+    if not curriculum_scopes_mastery_to_time_items(curriculum_id):
+        return _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, mastery_scoped=False)
+    return _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, mastery_scoped=True)
+
+
 def get_heatmap_data(project_id=None, curriculum_id=None):
-    """Returns {date_str: total_minutes} for the last 365 days."""
+    """
+    Returns {date_str: minutes_int | {m: minutes, a: true}} for the last 365 days.
+
+    ``a`` marks days with non-session activity (daily presence check-in or one-shot done)
+    when there were zero logged minutes that day — used for coloring and tooltips.
+    """
     end = date.today()
     start = end - timedelta(days=364)
+
+    cells = {}
 
     q = (
         db.session.query(
             Session.logged_at,
-            func.sum(Session.duration_minutes).label('total')
+            func.sum(Session.duration_minutes).label('total'),
         )
         .filter(Session.logged_at >= start, Session.logged_at <= end)
     )
     q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
     q = q.group_by(Session.logged_at)
+    for row in q.all():
+        key = row.logged_at.strftime('%Y-%m-%d')
+        m = int(row.total or 0)
+        cells[key] = {'m': m, 'non_session': False}
 
-    return {row.logged_at.strftime('%Y-%m-%d'): row.total for row in q.all()}
+    ad_q = (
+        db.session.query(ItemActivityDay.activity_date)
+        .join(CurriculumItem, ItemActivityDay.item_id == CurriculumItem.id)
+        .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
+        .filter(
+            CurriculumItem.deleted.is_(False),
+            ItemActivityDay.activity_date >= start,
+            ItemActivityDay.activity_date <= end,
+        )
+    )
+    if curriculum_id is not None:
+        ad_q = ad_q.filter(Curriculum.id == curriculum_id)
+    if project_id is not None:
+        ad_q = ad_q.filter(Curriculum.project_id == project_id)
+    for (d,) in ad_q.distinct().all():
+        key = d.strftime('%Y-%m-%d')
+        if key not in cells:
+            cells[key] = {'m': 0, 'non_session': True}
+        elif cells[key]['m'] == 0:
+            cells[key]['non_session'] = True
+
+    os_q = (
+        db.session.query(func.date(CurriculumItem.completed_at).label('d'))
+        .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
+        .filter(
+            CurriculumItem.deleted.is_(False),
+            CurriculumItem.item_kind == CurriculumItem.KIND_ONE_SHOT,
+            CurriculumItem.completed.is_(True),
+            CurriculumItem.completed_at.isnot(None),
+            func.date(CurriculumItem.completed_at) >= start,
+            func.date(CurriculumItem.completed_at) <= end,
+        )
+    )
+    if curriculum_id is not None:
+        os_q = os_q.filter(Curriculum.id == curriculum_id)
+    if project_id is not None:
+        os_q = os_q.filter(Curriculum.project_id == project_id)
+    for (d,) in os_q.distinct().all():
+        if d is None:
+            continue
+        key = d.isoformat() if isinstance(d, date) else str(d)[:10]
+        if key not in cells:
+            cells[key] = {'m': 0, 'non_session': True}
+        elif cells[key]['m'] == 0:
+            cells[key]['non_session'] = True
+
+    out = {}
+    for key, st in cells.items():
+        m = st['m']
+        if m > 0:
+            out[key] = m
+        elif st.get('non_session'):
+            out[key] = {'m': 0, 'a': True}
+    return out
 
 
 def _has_any_session_on(d, project_id=None, curriculum_id=None):
@@ -80,13 +169,57 @@ def _has_any_session_on(d, project_id=None, curriculum_id=None):
     return q.first() is not None
 
 
+def _has_item_activity_on(d, project_id=None, curriculum_id=None):
+    q = (
+        db.session.query(ItemActivityDay.id)
+        .join(CurriculumItem, ItemActivityDay.item_id == CurriculumItem.id)
+        .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
+        .filter(
+            CurriculumItem.deleted.is_(False),
+            ItemActivityDay.activity_date == d,
+        )
+    )
+    if curriculum_id is not None:
+        q = q.filter(Curriculum.id == curriculum_id)
+    if project_id is not None:
+        q = q.filter(Curriculum.project_id == project_id)
+    return q.first() is not None
+
+
+def _has_one_shot_completion_on(d, project_id=None, curriculum_id=None):
+    q = (
+        db.session.query(CurriculumItem.id)
+        .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
+        .filter(
+            CurriculumItem.deleted.is_(False),
+            CurriculumItem.item_kind == CurriculumItem.KIND_ONE_SHOT,
+            CurriculumItem.completed.is_(True),
+            CurriculumItem.completed_at.isnot(None),
+            func.date(CurriculumItem.completed_at) == d,
+        )
+    )
+    if curriculum_id is not None:
+        q = q.filter(Curriculum.id == curriculum_id)
+    if project_id is not None:
+        q = q.filter(Curriculum.project_id == project_id)
+    return q.first() is not None
+
+
+def _has_any_activity_on(d, project_id=None, curriculum_id=None):
+    return (
+        _has_any_session_on(d, project_id=project_id, curriculum_id=curriculum_id)
+        or _has_item_activity_on(d, project_id=project_id, curriculum_id=curriculum_id)
+        or _has_one_shot_completion_on(d, project_id=project_id, curriculum_id=curriculum_id)
+    )
+
+
 def get_streak(project_id=None, curriculum_id=None):
     today = date.today()
-    has_today = _has_any_session_on(today, project_id=project_id, curriculum_id=curriculum_id)
+    has_today = _has_any_activity_on(today, project_id=project_id, curriculum_id=curriculum_id)
     current = today if has_today else today - timedelta(days=1)
     streak = 0
     while True:
-        has = _has_any_session_on(current, project_id=project_id, curriculum_id=curriculum_id)
+        has = _has_any_activity_on(current, project_id=project_id, curriculum_id=curriculum_id)
         if has:
             streak += 1
             current -= timedelta(days=1)
@@ -114,17 +247,21 @@ def get_velocity(curriculum, days=30):
     end = date.today()
     start = end - timedelta(days=days)
 
-    if _curriculum_has_active_items(curriculum.id):
+    if curriculum_scopes_mastery_to_time_items(curriculum.id):
+        total_minutes, active_days = _sum_mastery_minutes_and_days(curriculum.id, start, end, item_tagged_only=True)
+        if total_minutes == 0:
+            total_minutes, active_days = _sum_mastery_minutes_and_days(curriculum.id, start, end, item_tagged_only=False)
+    elif _curriculum_has_active_items(curriculum.id):
         total_minutes, active_days = _sum_and_active_days_minutes(
-            curriculum.id, start, end, item_tagged_only=True
+            curriculum.id, start, end, item_tagged_only=True, mastery_scoped=False
         )
         if total_minutes == 0:
             total_minutes, active_days = _sum_and_active_days_minutes(
-                curriculum.id, start, end, item_tagged_only=False
+                curriculum.id, start, end, item_tagged_only=False, mastery_scoped=False
             )
     else:
         total_minutes, active_days = _sum_and_active_days_minutes(
-            curriculum.id, start, end, item_tagged_only=False
+            curriculum.id, start, end, item_tagged_only=False, mastery_scoped=False
         )
 
     if active_days == 0:

@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_
 from app import db
 
 
@@ -68,11 +68,22 @@ class Curriculum(db.Model):
 
     @property
     def total_minutes(self):
-        result = (
+        q = (
             db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
             .filter(Session.curriculum_id == self.id)
-            .scalar()
         )
+        if curriculum_scopes_mastery_to_time_items(self.id):
+            q = q.outerjoin(CurriculumItem, Session.item_id == CurriculumItem.id).filter(
+                or_(
+                    Session.item_id.is_(None),
+                    and_(
+                        CurriculumItem.deleted.is_(False),
+                        CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
+                        CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
+                    ),
+                )
+            )
+        result = q.scalar()
         return result or 0
 
     @property
@@ -97,11 +108,13 @@ class Curriculum(db.Model):
 
 
 class CurriculumItem(db.Model):
-    """Roadmap row: time is logged via sessions; done state is manual (check). Daily resets each calendar day."""
+    """Roadmap row: sessions log time. Daily items are either presence (manual check) or time_threshold (auto when today’s minutes ≥ target)."""
 
     __tablename__ = 'curriculum_item'
     KIND_ONE_SHOT = 'one_shot'
     KIND_DAILY = 'daily'
+    STYLE_PRESENCE = 'presence'
+    STYLE_TIME_THRESHOLD = 'time_threshold'
 
     id = db.Column(db.Integer, primary_key=True)
     curriculum_id = db.Column(db.Integer, db.ForeignKey('curriculum.id'), nullable=False)
@@ -110,12 +123,18 @@ class CurriculumItem(db.Model):
     deadline = db.Column(db.Date, nullable=True)
     hours_target = db.Column(db.Float, nullable=True)  # legacy / optional; not used for completion
     item_kind = db.Column(db.String(20), nullable=False, default=KIND_ONE_SHOT)
+    completion_style = db.Column(db.String(20), nullable=False, default=STYLE_PRESENCE)
+    daily_target_minutes = db.Column(db.Integer, nullable=True)  # daily + time_threshold: bar for “done today”
     completed = db.Column(db.Boolean, default=False)  # one_shot: manual done
     completed_at = db.Column(db.DateTime, nullable=True)
-    daily_completed_on = db.Column(db.Date, nullable=True)  # daily: checked iff == today
+    daily_completed_on = db.Column(db.Date, nullable=True)  # daily + presence: manual check for today
     sort_order = db.Column(db.Integer, default=0)
     deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    activity_days = db.relationship(
+        'ItemActivityDay', back_populates='item', cascade='all, delete-orphan', lazy='dynamic'
+    )
 
     @property
     def hours_logged(self):
@@ -138,10 +157,21 @@ class CurriculumItem(db.Model):
     def hours_logged_today(self):
         return self.minutes_logged_on(date.today()) / 60.0
 
+    def is_time_threshold_daily(self):
+        return (
+            self.item_kind == self.KIND_DAILY
+            and self.completion_style == self.STYLE_TIME_THRESHOLD
+        )
+
     def is_complete_for_stats(self, today=None):
         """Whether this item counts toward curriculum roadmap “done” count for ``today``."""
         today = today or date.today()
         if self.item_kind == self.KIND_DAILY:
+            if self.completion_style == self.STYLE_TIME_THRESHOLD:
+                tgt = self.daily_target_minutes
+                if tgt is None or tgt < 1:
+                    return False
+                return self.minutes_logged_on(today) >= tgt
             return self.daily_completed_on == today
         return bool(self.completed)
 
@@ -155,6 +185,11 @@ class CurriculumItem(db.Model):
     def is_daily_done_today(self):
         if self.item_kind != self.KIND_DAILY:
             return False
+        if self.completion_style == self.STYLE_TIME_THRESHOLD:
+            tgt = self.daily_target_minutes
+            if tgt is None or tgt < 1:
+                return False
+            return self.minutes_logged_on(date.today()) >= tgt
         return self.daily_completed_on == date.today()
 
     @property
@@ -181,6 +216,39 @@ class CurriculumItem(db.Model):
         if delta <= 7:
             return 'upcoming'
         return None
+
+    def accepts_time_logging(self):
+        """Only recurring time-target dailies use the session ledger for this item."""
+        return self.is_time_threshold_daily()
+
+
+def curriculum_scopes_mastery_to_time_items(curriculum_id):
+    """When True, mastery / progress counts only time-target daily sessions (and untagged sessions)."""
+    return (
+        db.session.query(CurriculumItem.id)
+        .filter(
+            CurriculumItem.curriculum_id == curriculum_id,
+            CurriculumItem.deleted.is_(False),
+            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
+            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
+        )
+        .first()
+        is not None
+    )
+
+
+class ItemActivityDay(db.Model):
+    """Historical calendar day when a daily presence item was marked done (heatmap / streak)."""
+
+    __tablename__ = 'item_activity_day'
+    __table_args__ = (db.UniqueConstraint('item_id', 'activity_date', name='uq_item_activity_day'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('curriculum_item.id', ondelete='CASCADE'), nullable=False)
+    activity_date = db.Column(db.Date, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    item = db.relationship('CurriculumItem', back_populates='activity_days')
 
 
 class Session(db.Model):

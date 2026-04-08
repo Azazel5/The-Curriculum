@@ -7,24 +7,35 @@ from app.forms import SessionForm
 sessions_bp = Blueprint('sessions', __name__)
 
 
-def _curriculum_has_items(cid):
+def _curriculum_has_time_loggable_items(cid):
+    """Only daily time-target rows use the session ledger; one-shots and presence dailies do not."""
     return (
         db.session.query(CurriculumItem.id)
-        .filter_by(curriculum_id=cid, deleted=False)
+        .filter(
+            CurriculumItem.curriculum_id == cid,
+            CurriculumItem.deleted.is_(False),
+            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
+            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
+        )
         .first()
         is not None
     )
 
 
 def _item_choices_for_curriculum(cid):
+    if not _curriculum_has_time_loggable_items(cid):
+        return [(0, '— log to curriculum only (no time-tracked roadmap rows) —')]
     items = (
         CurriculumItem.query
-        .filter_by(curriculum_id=cid, deleted=False)
+        .filter(
+            CurriculumItem.curriculum_id == cid,
+            CurriculumItem.deleted.is_(False),
+            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
+            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
+        )
         .order_by(CurriculumItem.sort_order, CurriculumItem.id)
         .all()
     )
-    if not items:
-        return [(0, '— no roadmap items: time applies to curriculum only —')]
     return [(i.id, i.title) for i in items]
 
 
@@ -48,7 +59,7 @@ def log_session():
     preselect = request.args.get('curriculum', type=int)
     if pre_item and not form.is_submitted():
         it = CurriculumItem.query.filter_by(id=pre_item, deleted=False).first()
-        if it:
+        if it and it.accepts_time_logging():
             form.curriculum_id.data = it.curriculum_id
             _populate_form(form)
             form.item_id.data = pre_item
@@ -65,22 +76,22 @@ def log_session():
             flash('Invalid curriculum', 'error')
             return render_template('sessions/log.html', form=form, curricula=curricula)
 
-        has_items = _curriculum_has_items(c.id)
+        needs_item = _curriculum_has_time_loggable_items(c.id)
         item_id = None
-        if has_items:
+        if needs_item:
             if not form.item_id.data:
-                flash('Select an item. Progress on this curriculum is tracked per roadmap item.', 'error')
+                flash('Select a time-tracked roadmap item (daily with a time target).', 'error')
                 return render_template('sessions/log.html', form=form, curricula=curricula)
             item = CurriculumItem.query.filter_by(
                 id=form.item_id.data, curriculum_id=c.id, deleted=False
             ).first()
-            if not item:
+            if not item or not item.accepts_time_logging():
                 flash('Invalid item for this curriculum', 'error')
                 return render_template('sessions/log.html', form=form, curricula=curricula)
             item_id = item.id
         else:
             if form.item_id.data:
-                flash('This curriculum has no items; log without an item tag.', 'error')
+                flash('This curriculum has no time-tracked items; log without an item tag.', 'error')
                 return render_template('sessions/log.html', form=form, curricula=curricula)
 
         total_minutes = (form.hours.data or 0) * 60 + (form.minutes.data or 0)
