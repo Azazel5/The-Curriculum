@@ -97,7 +97,7 @@ class Curriculum(db.Model):
 
 
 class CurriculumItem(db.Model):
-    """Roadmap row under a curriculum. Progress and “done” come from logged sessions only."""
+    """Roadmap row: time is logged via sessions; done state is manual (check). Daily resets each calendar day."""
 
     __tablename__ = 'curriculum_item'
     KIND_ONE_SHOT = 'one_shot'
@@ -108,11 +108,11 @@ class CurriculumItem(db.Model):
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     deadline = db.Column(db.Date, nullable=True)
-    # one_shot: total hours goal; daily: hours to log per calendar day to count “done today”
-    hours_target = db.Column(db.Float, nullable=True)
+    hours_target = db.Column(db.Float, nullable=True)  # legacy / optional; not used for completion
     item_kind = db.Column(db.String(20), nullable=False, default=KIND_ONE_SHOT)
-    completed = db.Column(db.Boolean, default=False)
+    completed = db.Column(db.Boolean, default=False)  # one_shot: manual done
     completed_at = db.Column(db.DateTime, nullable=True)
+    daily_completed_on = db.Column(db.Date, nullable=True)  # daily: checked iff == today
     sort_order = db.Column(db.Integer, default=0)
     deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -139,27 +139,23 @@ class CurriculumItem(db.Model):
         return self.minutes_logged_on(date.today()) / 60.0
 
     def is_complete_for_stats(self, today=None):
-        """Whether this item counts toward curriculum “items done” for ``today``."""
+        """Whether this item counts toward curriculum roadmap “done” count for ``today``."""
         today = today or date.today()
         if self.item_kind == self.KIND_DAILY:
-            if not self.hours_target or self.hours_target <= 0:
-                return False
-            return self.minutes_logged_on(today) >= self.hours_target * 60
-        if not self.hours_target or self.hours_target <= 0:
-            return False
-        return self.hours_logged >= self.hours_target
+            return self.daily_completed_on == today
+        return bool(self.completed)
 
     @property
     def is_one_shot_done(self):
         if self.item_kind != self.KIND_ONE_SHOT:
             return False
-        return self.is_complete_for_stats()
+        return bool(self.completed)
 
     @property
     def is_daily_done_today(self):
         if self.item_kind != self.KIND_DAILY:
             return False
-        return self.is_complete_for_stats(date.today())
+        return self.daily_completed_on == date.today()
 
     @property
     def is_pending_in_roadmap(self):

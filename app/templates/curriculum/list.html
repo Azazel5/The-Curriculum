@@ -63,7 +63,7 @@
             </div>
             <div class="flex justify-between mt-1 text-xs">
               <span class="font-semibold" style="color:{{ c.progress_pct|pct_color }}">{{ '%.1f'|format(c.progress_pct) }}%</span>
-              <span class="text-gray-600">{{ c.completed_items_count }}/{{ c.total_items_count }} items at goal</span>
+              <span class="text-gray-600">{{ c.completed_items_count }}/{{ c.total_items_count }} items done</span>
             </div>
           </div>
 
@@ -110,7 +110,7 @@
           </div>
           <div class="flex justify-between mt-1 text-xs">
             <span class="font-semibold" style="color:{{ c.progress_pct|pct_color }}">{{ '%.1f'|format(c.progress_pct) }}%</span>
-            <span class="text-gray-600">{{ c.completed_items_count }}/{{ c.total_items_count }} items at goal</span>
+            <span class="text-gray-600">{{ c.completed_items_count }}/{{ c.total_items_count }} items done</span>
           </div>
         </div>
 

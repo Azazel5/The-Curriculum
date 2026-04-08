@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from app import db
 from app.models import Curriculum, CurriculumItem, Session, Project
@@ -154,19 +154,11 @@ def add_item(id):
         return redirect(url_for('curriculum.curriculum_detail', id=id))
 
     deadline_str = request.form.get('deadline', '').strip()
-    hours_str = request.form.get('hours_target', '').strip()
 
     deadline = None
     if deadline_str:
         try:
             deadline = date.fromisoformat(deadline_str)
-        except ValueError:
-            pass
-
-    hours_target = None
-    if hours_str:
-        try:
-            hours_target = float(hours_str)
         except ValueError:
             pass
 
@@ -182,11 +174,28 @@ def add_item(id):
         title=title,
         description=request.form.get('description', '').strip() or None,
         deadline=deadline,
-        hours_target=hours_target,
         item_kind=kind,
         sort_order=max_order + 1
     )
     db.session.add(item)
+    db.session.commit()
+    return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
+
+
+@curriculum_bp.route('/curriculums/<int:id>/items/<int:iid>/complete', methods=['GET', 'POST'])
+def toggle_item(id, iid):
+    if request.method == 'GET':
+        return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
+    item = CurriculumItem.query.filter_by(id=iid, curriculum_id=id, deleted=False).first_or_404()
+    today = date.today()
+    if item.item_kind == CurriculumItem.KIND_DAILY:
+        if item.daily_completed_on == today:
+            item.daily_completed_on = None
+        else:
+            item.daily_completed_on = today
+    else:
+        item.completed = not item.completed
+        item.completed_at = datetime.utcnow() if item.completed else None
     db.session.commit()
     return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
 
@@ -202,15 +211,14 @@ def edit_item(id, iid):
     deadline_str = request.form.get('deadline', '').strip()
     item.deadline = date.fromisoformat(deadline_str) if deadline_str else None
 
-    hours_str = request.form.get('hours_target', '').strip()
-    try:
-        item.hours_target = float(hours_str) if hours_str else None
-    except ValueError:
-        pass
-
+    prev_kind = item.item_kind
     kind = request.form.get('item_kind', item.item_kind)
     if kind in (CurriculumItem.KIND_ONE_SHOT, CurriculumItem.KIND_DAILY):
         item.item_kind = kind
+    if prev_kind != item.item_kind:
+        item.completed = False
+        item.completed_at = None
+        item.daily_completed_on = None
 
     db.session.commit()
     return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')

@@ -37,12 +37,11 @@ class CurriculumItemForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired()])
     description = TextAreaField('Description', validators=[Optional()])
     deadline = DateField('Deadline', validators=[Optional()])
-    hours_target = FloatField('Hours target (optional)', validators=[Optional(), NumberRange(min=0)])
     item_kind = SelectField(
         'Item type',
         choices=[
-            ('one_shot', 'One-time (total hours goal)'),
-            ('daily', 'Daily (repeats each day)'),
+            ('one_shot', 'One-time'),
+            ('daily', 'Daily (check resets each day)'),
         ],
         default='one_shot',
         validators=[DataRequired()],
