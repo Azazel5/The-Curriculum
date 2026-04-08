@@ -14,14 +14,15 @@ def _apply_scope(q, user_id=None, project_id=None, curriculum_id=None):
     """
     Apply optional scoping to a Session-based query.
 
-    - user_id scope joins Curriculum and filters Curriculum.user_id.
-    - project_id scope joins Curriculum and filters Curriculum.project_id.
+    - user_id/project_id scope joins Curriculum once and filters.
     - curriculum_id scope filters Session.curriculum_id.
     """
-    if user_id is not None:
-        q = q.join(Curriculum, Session.curriculum_id == Curriculum.id).filter(Curriculum.user_id == user_id)
-    if project_id is not None:
-        q = q.join(Curriculum, Session.curriculum_id == Curriculum.id).filter(Curriculum.project_id == project_id)
+    if user_id is not None or project_id is not None:
+        q = q.join(Curriculum, Session.curriculum_id == Curriculum.id)
+        if user_id is not None:
+            q = q.filter(Curriculum.user_id == user_id)
+        if project_id is not None:
+            q = q.filter(Curriculum.project_id == project_id)
     if curriculum_id is not None:
         q = q.filter(Session.curriculum_id == curriculum_id)
     return q
