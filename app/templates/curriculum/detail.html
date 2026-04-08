@@ -171,7 +171,7 @@
         <div class="flex items-start gap-4 px-5 py-5">
 
           <form method="post"
-                action="{{ url_for('curriculum.toggle_item', id=curriculum.id, iid=item.id) }}"
+                action="{{ url_for('curriculum.toggle_item', cid=curriculum.id, item_id=item.id) }}"
                 class="pt-1 flex-shrink-0">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit"

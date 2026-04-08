@@ -182,11 +182,12 @@ def add_item(id):
     return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
 
 
-@curriculum_bp.route('/curriculums/<int:id>/items/<int:iid>/complete', methods=['GET', 'POST'])
-def toggle_item(id, iid):
+@curriculum_bp.route('/curriculums/<int:cid>/items/<int:item_id>/complete', methods=['GET', 'POST'])
+def toggle_item(cid, item_id):
+    """Use cid/item_id in the path so url_for(..., cid=, item_id=) never collides with reserved args."""
     if request.method == 'GET':
-        return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
-    item = CurriculumItem.query.filter_by(id=iid, curriculum_id=id, deleted=False).first_or_404()
+        return redirect(url_for('curriculum.curriculum_detail', id=cid) + '#items')
+    item = CurriculumItem.query.filter_by(id=item_id, curriculum_id=cid, deleted=False).first_or_404()
     today = date.today()
     if item.item_kind == CurriculumItem.KIND_DAILY:
         if item.daily_completed_on == today:
@@ -197,7 +198,7 @@ def toggle_item(id, iid):
         item.completed = not item.completed
         item.completed_at = datetime.utcnow() if item.completed else None
     db.session.commit()
-    return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
+    return redirect(url_for('curriculum.curriculum_detail', id=cid) + '#items')
 
 
 @curriculum_bp.route('/curriculums/<int:id>/items/<int:iid>/edit', methods=['POST'])
