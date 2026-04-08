@@ -6,39 +6,56 @@ A small Flask app for tracking **deliberate practice** without fooling yourself.
 
 ## Why this exists
 
-Most of us know *what* we want to get good at; fewer of us can point to **how many honest hours** we’ve put in. This app separates **big goals** from **day-to-day work**, and ties progress to **logged time**—not vibes. The roadmap checkboxes are a separate, honest signal: *I did what I meant to do today / for this task*, including a **daily** mode that resets each calendar day while **keeping every minute you’ve ever logged** on that row.
+Most of us know *what* we want to get good at; fewer of us can point to **how many honest hours** we’ve put in. This app ties progress to **logged time**—not vibes—and surfaces **where you’re investing (or neglecting)** at every level of the hierarchy.
+
+Roadmap checkboxes are a separate, honest signal: *I did what I meant to do today / for this task*, including a **daily** mode that resets each calendar day while **keeping every minute you’ve ever logged** on that row.
 
 It’s also a humility tool. A thousand hours sounds abstract until you try to **earn** them in real weeks.
 
 ---
 
-## How the pieces fit together
+## Hierarchy: **Project → Curriculum → Item**
 
-Think in three layers:
+The mental model is strict top-down:
 
 | Layer | What it is | Role |
 |--------|------------|------|
-| **Project** | A theme or North Star | Groups related pursuits (e.g. “Research skills,” “Interview prep”). Optional but useful when one life area has several curricula. |
-| **Curriculum** | The main habit or arena | This is where your **mastery target** lives (default often **1000 hours**)—the bar you’re trying to fill with real sessions. Progress % and “hours logged” roll up here. |
-| **Item** | A concrete row on the roadmap | Papers to read, skills to drill, loops to close. You **log time against the curriculum** and **tag sessions to an item** when the curriculum has items—so hours attach to something specific. |
+| **Project** | North Star / theme | The parent bucket. Groups related curricula (e.g. “Deep learning expertise,” “Interview prep”). **The home dashboard (`/`) is your projects control center**: see projects, create them, filter by project, and see project-level streaks and activity. |
+| **Curriculum** | The habit or arena | Where your **mastery target** lives (often **~1000 hours**) and where **sessions** attach. Progress % and hours roll up here and into the parent project. |
+| **Item** | Roadmap row | Concrete work: papers, drills, loops. You log time on the curriculum and **tag the item** when the curriculum has items—so you can see **where time actually went**. Completion is **manual** (one-shot or daily reset). |
 
-**Goals vs. items**
-
-- The **curriculum’s mastery hours** are the big, humbling number: how much *focused* work you’re claiming it takes to matter here.
-- **Items** are the checklist you actually touch day to day: deadlines, descriptions, and (for **daily** rows) a fresh “done for today” checkbox every morning while **cumulative hours on that item** keep growing forever.
-
-Nothing magic crosses an item off: you **check it** when you’re satisfied. The clock doesn’t lie; the check is your judgment call.
+**Project > Curriculum > Item** is the spine: if you’re “working every day” but one project never gets heatmap color, or one curriculum inside a project is flat, the app is designed to make that visible—not to average it away.
 
 ---
 
-## Time logging (the source of truth)
+## Data-driven insight at every level
 
-- **Sessions** are the ledger. Every log adds minutes to the **curriculum** (and to the **project**, if linked).
-- If a curriculum has roadmap items, you **tag the item** so per-item and heatmap views reflect where the time went.
-- **Manual entry** and a **stopwatch** on the Log Time page both write the same kind of session.
-- Deleting or archiving structure doesn’t rewrite history: old sessions stay until you delete them.
+The app is built so you can spot **slacking or blind spots** without hand-waving:
 
-So: **time answers “how much have I actually invested?”** The **checkbox** answers “did I close the loop I care about?”—especially meaningful for **daily** habits where consistency beats intensity.
+- **Project (dashboard `/`)**  
+  Per-project **streak** (consecutive days with any session in that project), **today** minutes, **365-day heatmap** (scoped when you filter), and a **curricula list** for the selected project. You land here first so you can’t ignore whole themes.
+
+- **Curriculum (`/curriculums/<id>`)**  
+  Pace (**hours per day you actually logged** in the last window, using **active days**, not blank calendar days), projected completion vs target date, per-item time, activity heatmap, and recent sessions—scoped to that curriculum.
+
+- **Insights (`/insights`)**  
+  Filter **by project**, then **by curriculum**. Daily and weekly charts and the mastery table respect that scope so you can compare “this project vs that” and drill to a single curriculum when you need to.
+
+- **Curriculums index (`/curriculums`)**  
+  Everything listed **grouped by project**—good for design and bulk navigation. “View project” goes to the **project detail** page for that bucket; the **projects list** itself lives on the dashboard, not on a duplicate `/projects` list route.
+
+**Pace note:** velocity is **total hours in the trailing window ÷ distinct days with ≥1 session** in that scope (not “÷ 30” on the calendar). Idle days don’t dilute your average on days you actually showed up.
+
+---
+
+## Time logging (source of truth)
+
+- **Sessions** are the ledger. Every log adds minutes to the **curriculum** and rolls up to the **project** when the curriculum belongs to one.
+- If a curriculum has roadmap items, you **tag the item** so per-item stats and views stay honest.
+- **Manual entry** and the **stopwatch** on Log Time both write the same session type.
+- Archiving structure doesn’t erase history until you delete sessions.
+
+**Time** answers “how much did I invest?” **Checkboxes** answer “did I close the loop I care about?”—especially for **daily** habits.
 
 ---
 
@@ -52,9 +69,9 @@ Rough orders of magnitude:
 - **2 hours/day** → still well over a **year** of never missing.
 - **One serious 3-hour block on weekdays only** → on the order of **a year and a half**.
 
-That’s assuming the hours are **deliberate**—not half-distracted scrolling, not “being in the room.” A thousand *good* hours is a career’s worth of side attention for most people. Ten thousand is a lifetime theme, not a semester project.
+That’s assuming the hours are **deliberate**—not half-distracted scrolling, not “being in the room.” A thousand *good* hours is a career’s worth of side attention for most people.
 
-The app’s job is to make that **visible**: a bar that moves when you log, a heatmap that doesn’t care about your intentions, and a number that goes up only when you admit what you did with the clock.
+The app’s job is to make that **visible**: bars that move when you log, heatmaps that don’t care about your intentions, and scoped insights so you see **which project or curriculum you’re starving**.
 
 If you use it honestly, it will feel slow. That’s the point. **Slowness is the shape of mastery.**
 
