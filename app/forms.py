@@ -2,9 +2,9 @@ from datetime import date
 from flask_wtf import FlaskForm
 from wtforms import (
     StringField, TextAreaField, FloatField, IntegerField,
-    SelectField, DateField, HiddenField
+    SelectField, DateField, HiddenField, PasswordField
 )
-from wtforms.validators import DataRequired, Optional, NumberRange
+from wtforms.validators import DataRequired, Optional, NumberRange, Email, Length, EqualTo
 
 
 class CurriculumForm(FlaskForm):
@@ -62,3 +62,26 @@ class SettingsForm(FlaskForm):
     reminder_time = StringField('Remind me at (HH:MM, 24h)', validators=[Optional()])
     reminder_active = SelectField('Reminders', choices=[('1', 'Enabled'), ('0', 'Disabled')], default='1')
     timezone = StringField('Timezone', default='UTC', validators=[Optional()])
+
+
+class LoginForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=8, max=255)])
+
+
+class RegisterForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=8, max=255)])
+    password_confirm = PasswordField(
+        'Confirm password',
+        validators=[DataRequired(), EqualTo('password', message='Passwords must match')],
+    )
+
+
+class SetupForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=8, max=255)])
+    password_confirm = PasswordField(
+        'Confirm password',
+        validators=[DataRequired(), EqualTo('password', message='Passwords must match')],
+    )

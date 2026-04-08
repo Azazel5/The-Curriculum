@@ -1,5 +1,6 @@
 from datetime import date
 from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask_login import login_required, current_user
 from app import db
 from app.models import Session, Curriculum, CurriculumItem
 from app.forms import SessionForm
@@ -40,7 +41,7 @@ def _item_choices_for_curriculum(cid):
 
 
 def _populate_form(form):
-    curricula = Curriculum.query.filter_by(archived=False).order_by(Curriculum.name).all()
+    curricula = Curriculum.query.filter_by(user_id=current_user.id, archived=False).order_by(Curriculum.name).all()
     form.curriculum_id.choices = [(c.id, c.name) for c in curricula]
     cid = form.curriculum_id.data
     if cid:
@@ -51,6 +52,7 @@ def _populate_form(form):
 
 
 @sessions_bp.route('/log', methods=['GET', 'POST'])
+@login_required
 def log_session():
     form = SessionForm()
     curricula = _populate_form(form)
@@ -58,20 +60,31 @@ def log_session():
     pre_item = request.args.get('item', type=int)
     preselect = request.args.get('curriculum', type=int)
     if pre_item and not form.is_submitted():
-        it = CurriculumItem.query.filter_by(id=pre_item, deleted=False).first()
+        it = (
+            CurriculumItem.query
+            .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
+            .filter(
+                CurriculumItem.id == pre_item,
+                CurriculumItem.deleted.is_(False),
+                Curriculum.user_id == current_user.id,
+            )
+            .first()
+        )
         if it and it.accepts_time_logging():
             form.curriculum_id.data = it.curriculum_id
             _populate_form(form)
             form.item_id.data = pre_item
     elif preselect and not form.is_submitted():
-        form.curriculum_id.data = preselect
+        c0 = Curriculum.query.filter_by(id=preselect, user_id=current_user.id, archived=False).first()
+        if c0:
+            form.curriculum_id.data = preselect
         _populate_form(form)
 
     if request.method == 'POST' and form.curriculum_id.data:
         _populate_form(form)
 
     if form.validate_on_submit():
-        c = Curriculum.query.get(form.curriculum_id.data)
+        c = Curriculum.query.filter_by(id=form.curriculum_id.data, user_id=current_user.id).first()
         if not c or c.archived:
             flash('Invalid curriculum', 'error')
             return render_template('sessions/log.html', form=form, curricula=curricula)
@@ -122,8 +135,14 @@ def log_session():
 
 
 @sessions_bp.route('/sessions/<int:id>/delete', methods=['POST'])
+@login_required
 def delete_session(id):
-    s = Session.query.get_or_404(id)
+    s = (
+        Session.query
+        .join(Curriculum, Session.curriculum_id == Curriculum.id)
+        .filter(Session.id == id, Curriculum.user_id == current_user.id)
+        .first_or_404()
+    )
     db.session.delete(s)
     db.session.commit()
     flash('Session deleted', 'success')

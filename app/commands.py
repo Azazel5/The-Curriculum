@@ -6,16 +6,23 @@ def register_commands(app):
     @app.cli.command('seed')
     def seed():
         """Seed the database with Anthropic Interview Prep curriculum."""
-        from app.models import Curriculum, CurriculumItem, Settings
+        from app.models import Curriculum, CurriculumItem, Settings, User
 
         if Curriculum.query.count() > 0:
             click.echo('Database already seeded. Skipping.')
             return
 
-        if not Settings.query.first():
-            db.session.add(Settings())
+        owner = User.query.get(1)
+        if not owner:
+            owner = User(id=1, email=None, password_hash=None, is_guest=False)
+            db.session.add(owner)
+            db.session.commit()
+
+        if not Settings.query.filter_by(user_id=owner.id).first():
+            db.session.add(Settings(user_id=owner.id))
 
         c = Curriculum(
+            user_id=owner.id,
             name='Anthropic Interview Prep',
             description='Structured preparation to make failure impossible. '
                         'Every hour logged is an hour closer to the goal.',

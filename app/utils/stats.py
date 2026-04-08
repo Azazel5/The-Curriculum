@@ -10,13 +10,16 @@ from app.models import (
 )
 
 
-def _apply_scope(q, project_id=None, curriculum_id=None):
+def _apply_scope(q, user_id=None, project_id=None, curriculum_id=None):
     """
     Apply optional scoping to a Session-based query.
 
+    - user_id scope joins Curriculum and filters Curriculum.user_id.
     - project_id scope joins Curriculum and filters Curriculum.project_id.
     - curriculum_id scope filters Session.curriculum_id.
     """
+    if user_id is not None:
+        q = q.join(Curriculum, Session.curriculum_id == Curriculum.id).filter(Curriculum.user_id == user_id)
     if project_id is not None:
         q = q.join(Curriculum, Session.curriculum_id == Curriculum.id).filter(Curriculum.project_id == project_id)
     if curriculum_id is not None:
@@ -81,7 +84,7 @@ def _sum_mastery_minutes_and_days(curriculum_id, start, end, item_tagged_only):
     return _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, mastery_scoped=True)
 
 
-def get_heatmap_data(project_id=None, curriculum_id=None):
+def get_heatmap_data(user_id=None, project_id=None, curriculum_id=None):
     """
     Returns {date_str: minutes_int | {m: minutes, a: true}} for the last 365 days.
 
@@ -100,7 +103,7 @@ def get_heatmap_data(project_id=None, curriculum_id=None):
         )
         .filter(Session.logged_at >= start, Session.logged_at <= end)
     )
-    q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+    q = _apply_scope(q, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
     q = q.group_by(Session.logged_at)
     for row in q.all():
         key = row.logged_at.strftime('%Y-%m-%d')
@@ -117,6 +120,8 @@ def get_heatmap_data(project_id=None, curriculum_id=None):
             ItemActivityDay.activity_date <= end,
         )
     )
+    if user_id is not None:
+        ad_q = ad_q.filter(Curriculum.user_id == user_id)
     if curriculum_id is not None:
         ad_q = ad_q.filter(Curriculum.id == curriculum_id)
     if project_id is not None:
@@ -140,6 +145,8 @@ def get_heatmap_data(project_id=None, curriculum_id=None):
             func.date(CurriculumItem.completed_at) <= end,
         )
     )
+    if user_id is not None:
+        os_q = os_q.filter(Curriculum.user_id == user_id)
     if curriculum_id is not None:
         os_q = os_q.filter(Curriculum.id == curriculum_id)
     if project_id is not None:
@@ -163,13 +170,13 @@ def get_heatmap_data(project_id=None, curriculum_id=None):
     return out
 
 
-def _has_any_session_on(d, project_id=None, curriculum_id=None):
+def _has_any_session_on(d, user_id=None, project_id=None, curriculum_id=None):
     q = db.session.query(Session.id).filter(Session.logged_at == d)
-    q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+    q = _apply_scope(q, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
     return q.first() is not None
 
 
-def _has_item_activity_on(d, project_id=None, curriculum_id=None):
+def _has_item_activity_on(d, user_id=None, project_id=None, curriculum_id=None):
     q = (
         db.session.query(ItemActivityDay.id)
         .join(CurriculumItem, ItemActivityDay.item_id == CurriculumItem.id)
@@ -179,6 +186,8 @@ def _has_item_activity_on(d, project_id=None, curriculum_id=None):
             ItemActivityDay.activity_date == d,
         )
     )
+    if user_id is not None:
+        q = q.filter(Curriculum.user_id == user_id)
     if curriculum_id is not None:
         q = q.filter(Curriculum.id == curriculum_id)
     if project_id is not None:
@@ -186,7 +195,7 @@ def _has_item_activity_on(d, project_id=None, curriculum_id=None):
     return q.first() is not None
 
 
-def _has_one_shot_completion_on(d, project_id=None, curriculum_id=None):
+def _has_one_shot_completion_on(d, user_id=None, project_id=None, curriculum_id=None):
     q = (
         db.session.query(CurriculumItem.id)
         .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
@@ -198,6 +207,8 @@ def _has_one_shot_completion_on(d, project_id=None, curriculum_id=None):
             func.date(CurriculumItem.completed_at) == d,
         )
     )
+    if user_id is not None:
+        q = q.filter(Curriculum.user_id == user_id)
     if curriculum_id is not None:
         q = q.filter(Curriculum.id == curriculum_id)
     if project_id is not None:
@@ -205,21 +216,21 @@ def _has_one_shot_completion_on(d, project_id=None, curriculum_id=None):
     return q.first() is not None
 
 
-def _has_any_activity_on(d, project_id=None, curriculum_id=None):
+def _has_any_activity_on(d, user_id=None, project_id=None, curriculum_id=None):
     return (
-        _has_any_session_on(d, project_id=project_id, curriculum_id=curriculum_id)
-        or _has_item_activity_on(d, project_id=project_id, curriculum_id=curriculum_id)
-        or _has_one_shot_completion_on(d, project_id=project_id, curriculum_id=curriculum_id)
+        _has_any_session_on(d, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
+        or _has_item_activity_on(d, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
+        or _has_one_shot_completion_on(d, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
     )
 
 
-def get_streak(project_id=None, curriculum_id=None):
+def get_streak(user_id=None, project_id=None, curriculum_id=None):
     today = date.today()
-    has_today = _has_any_activity_on(today, project_id=project_id, curriculum_id=curriculum_id)
+    has_today = _has_any_activity_on(today, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
     current = today if has_today else today - timedelta(days=1)
     streak = 0
     while True:
-        has = _has_any_activity_on(current, project_id=project_id, curriculum_id=curriculum_id)
+        has = _has_any_activity_on(current, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
         if has:
             streak += 1
             current -= timedelta(days=1)
@@ -228,9 +239,9 @@ def get_streak(project_id=None, curriculum_id=None):
     return streak
 
 
-def get_today_minutes(project_id=None, curriculum_id=None):
+def get_today_minutes(user_id=None, project_id=None, curriculum_id=None):
     q = db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0)).filter(Session.logged_at == date.today())
-    q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+    q = _apply_scope(q, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
     result = q.scalar()
     return result or 0
 
@@ -280,9 +291,11 @@ def get_projected_completion(curriculum):
     return date.today() + timedelta(days=max(days_needed, 0))
 
 
-def get_curriculum_time_distribution(project_id=None):
+def get_curriculum_time_distribution(user_id=None, project_id=None):
     """Returns list of {name,color,minutes} for curricula with time logged, optionally scoped to a project."""
     curricula_q = Curriculum.query.filter_by(archived=False)
+    if user_id is not None:
+        curricula_q = curricula_q.filter(Curriculum.user_id == user_id)
     if project_id is not None:
         curricula_q = curricula_q.filter(Curriculum.project_id == project_id)
     curricula = curricula_q.all()
@@ -298,13 +311,13 @@ def get_curriculum_time_distribution(project_id=None):
     return result
 
 
-def get_daily_breakdown(days=30, project_id=None, curriculum_id=None):
+def get_daily_breakdown(days=30, user_id=None, project_id=None, curriculum_id=None):
     end = date.today()
     start = end - timedelta(days=days - 1)
     q = db.session.query(Session.logged_at, func.sum(Session.duration_minutes).label('total')).filter(
         Session.logged_at >= start, Session.logged_at <= end
     )
-    q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+    q = _apply_scope(q, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
     rows = q.group_by(Session.logged_at).all()
     data = {row.logged_at: row.total for row in rows}
     result = []
@@ -315,7 +328,7 @@ def get_daily_breakdown(days=30, project_id=None, curriculum_id=None):
     return result
 
 
-def get_weekly_breakdown(weeks=12, project_id=None, curriculum_id=None):
+def get_weekly_breakdown(weeks=12, user_id=None, project_id=None, curriculum_id=None):
     result = []
     end = date.today()
     for i in range(weeks - 1, -1, -1):
@@ -324,7 +337,7 @@ def get_weekly_breakdown(weeks=12, project_id=None, curriculum_id=None):
         q = db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0)).filter(
             Session.logged_at >= week_start, Session.logged_at <= week_end
         )
-        q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+        q = _apply_scope(q, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
         total = (q.scalar() or 0)
         result.append({'week': week_start.strftime('%b %d'), 'minutes': total})
     return result

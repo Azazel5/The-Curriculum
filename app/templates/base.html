@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>The Curriculum</title>
+  {% set _base = public_base_url or request.url_root.rstrip('/') %}
+  <meta property="og:title" content="The Curriculum" />
+  <meta property="og:description" content="A data-driven deliberate-practice tracker: projects → curricula → items, honest time logging, and activity heatmaps." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="{{ _base ~ request.path }}" />
+  <meta property="og:image" content="{{ _base ~ url_for('static', filename='cons.png') }}" />
+  <meta property="og:image:alt" content="The Curriculum — deliberate practice tracker preview image" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="The Curriculum" />
+  <meta name="twitter:description" content="A data-driven deliberate-practice tracker: projects → curricula → items, honest time logging, and activity heatmaps." />
+  <meta name="twitter:image" content="{{ _base ~ url_for('static', filename='cons.png') }}" />
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -19,19 +30,50 @@
 
   <!-- Nav -->
   <nav class="sticky top-0 z-40 border-b border-gray-800 bg-gray-950/95 backdrop-blur-sm">
-    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
       <a href="/" class="flex items-center gap-2 font-bold text-lg tracking-tight">
         <span class="text-green-400">◉</span>
         <span class="text-white">The Curriculum</span>
       </a>
-      <div class="flex items-center gap-1">
-        <a href="/" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Projects</a>
-        <a href="/curriculums" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Curriculums</a>
-        <a href="/insights" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Insights</a>
-        <a href="/settings" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Settings</a>
-        <div class="w-px h-4 bg-gray-700 mx-2"></div>
+
+      {% if current_user.is_authenticated %}
+      <div class="flex items-center gap-2">
         <a href="/log" class="bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition-colors">+ Log Time</a>
+
+        <div class="hidden md:flex items-center gap-1">
+          <a href="/" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Projects</a>
+          <a href="/curriculums" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Curriculums</a>
+          <a href="/insights" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Insights</a>
+          <a href="/settings" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Settings</a>
+          <form method="POST" action="{{ url_for('auth.logout') }}" class="ml-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Logout</button>
+          </form>
+        </div>
+
+        <details class="relative md:hidden">
+          <summary class="list-none cursor-pointer select-none px-3 py-1.5 text-sm text-gray-300 border border-gray-700 rounded-lg hover:border-gray-600 hover:text-white transition-colors">
+            Menu
+          </summary>
+          <div class="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-1">
+            <a href="/" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Projects</a>
+            <a href="/curriculums" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Curriculums</a>
+            <a href="/insights" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Insights</a>
+            <a href="/settings" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Settings</a>
+            <div class="h-px bg-gray-800 my-1"></div>
+            <form method="POST" action="{{ url_for('auth.logout') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Logout</button>
+            </form>
+          </div>
+        </details>
       </div>
+      {% else %}
+      <div class="flex items-center gap-2">
+        <a href="{{ url_for('auth.login') }}" class="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Login</a>
+        <a href="{{ url_for('auth.register') }}" class="bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition-colors">Create account</a>
+      </div>
+      {% endif %}
     </div>
   </nav>
 
@@ -71,7 +113,7 @@
   {% endwith %}
 
   <!-- Page content -->
-  <main class="max-w-6xl mx-auto px-6 py-8">
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
     {% block content %}{% endblock %}
   </main>
 

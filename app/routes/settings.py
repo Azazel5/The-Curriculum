@@ -1,5 +1,6 @@
 from datetime import time as time_type
 from flask import Blueprint, render_template, redirect, url_for, flash
+from flask_login import login_required, current_user
 from app import db
 from app.models import Settings
 from app.forms import SettingsForm
@@ -8,10 +9,11 @@ settings_bp = Blueprint('settings', __name__)
 
 
 @settings_bp.route('/settings', methods=['GET', 'POST'])
+@login_required
 def settings():
-    s = Settings.query.first()
+    s = Settings.query.filter_by(user_id=current_user.id).first()
     if not s:
-        s = Settings()
+        s = Settings(user_id=current_user.id)
         db.session.add(s)
         db.session.commit()
 

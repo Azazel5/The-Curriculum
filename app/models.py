@@ -1,11 +1,29 @@
 from datetime import datetime, date
 from sqlalchemy import func, and_, or_
 from app import db
+from flask_login import UserMixin
+
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'app_user'
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=True)
+    password_hash = db.Column(db.String(255), nullable=True)
+    is_guest = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    projects = db.relationship('Project', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    curricula = db.relationship('Curriculum', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    settings = db.relationship('Settings', backref='user', uselist=False, cascade='all, delete-orphan')
 
 
 class Settings(db.Model):
     __tablename__ = 'settings'
+    __table_args__ = (db.UniqueConstraint('user_id', name='uq_settings_user_id'),)
+
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('app_user.id', ondelete='CASCADE'), nullable=False, index=True)
     email = db.Column(db.String(120), nullable=True)
     reminder_time = db.Column(db.Time, nullable=True)
     reminder_active = db.Column(db.Boolean, default=True)
@@ -15,6 +33,7 @@ class Settings(db.Model):
 class Project(db.Model):
     __tablename__ = 'project'
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('app_user.id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)
     color = db.Column(db.String(7), default='#6366f1')
@@ -42,6 +61,7 @@ class Curriculum(db.Model):
     """The habit itself — e.g. 'Anthropic Interview Prep'. Time is tracked at this level."""
     __tablename__ = 'curriculum'
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('app_user.id', ondelete='CASCADE'), nullable=False, index=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)

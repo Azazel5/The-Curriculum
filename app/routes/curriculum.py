@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask_login import login_required, current_user
 from app import db
 from app.models import Curriculum, CurriculumItem, Session, Project, ItemActivityDay
 from app.forms import CurriculumForm, CurriculumItemForm, ProjectForm
@@ -28,8 +29,11 @@ def _parse_item_completion_fields(request_form, item_kind):
 
 
 @curriculum_bp.route('/curriculums')
+@login_required
 def list_curriculums():
-    curricula = Curriculum.query.filter_by(archived=False).order_by(Curriculum.project_id, Curriculum.created_at).all()
+    curricula = Curriculum.query.filter_by(user_id=current_user.id, archived=False).order_by(
+        Curriculum.project_id, Curriculum.created_at
+    ).all()
     grouped = []
     project_map = {}
     for c in curricula:
@@ -43,18 +47,25 @@ def list_curriculums():
 
 
 def _populate_project_choices(form):
-    projects = Project.query.order_by(Project.name).all()
+    projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.name).all()
     form.project_id.choices = [(0, '— none —')] + [(p.id, p.name) for p in projects]
     return projects
 
 
 @curriculum_bp.route('/curriculums/new', methods=['GET', 'POST'])
+@login_required
 def new_curriculum():
     form = CurriculumForm()
     _populate_project_choices(form)
     if form.validate_on_submit():
         project_id = form.project_id.data if form.project_id.data else None
+        if project_id:
+            project = Project.query.filter_by(id=project_id, user_id=current_user.id).first()
+            if not project:
+                flash('Invalid project', 'error')
+                return render_template('curriculum/new.html', form=form)
         c = Curriculum(
+            user_id=current_user.id,
             project_id=project_id,
             name=form.name.data,
             description=form.description.data,
@@ -72,8 +83,9 @@ def new_curriculum():
 
 
 @curriculum_bp.route('/curriculums/<int:id>', methods=['GET', 'POST'])
+@login_required
 def curriculum_detail(id):
-    c = Curriculum.query.get_or_404(id)
+    c = Curriculum.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     form = CurriculumForm(obj=c)
     _populate_project_choices(form)
     if not form.is_submitted():
@@ -81,7 +93,13 @@ def curriculum_detail(id):
     item_form = CurriculumItemForm()
 
     if form.validate_on_submit() and 'save_curriculum' in request.form:
-        c.project_id = form.project_id.data if form.project_id.data else None
+        new_project_id = form.project_id.data if form.project_id.data else None
+        if new_project_id:
+            project = Project.query.filter_by(id=new_project_id, user_id=current_user.id).first()
+            if not project:
+                flash('Invalid project', 'error')
+                return redirect(url_for('curriculum.curriculum_detail', id=id))
+        c.project_id = new_project_id
         c.name = form.name.data
         c.description = form.description.data
         c.mastery_hours = form.mastery_hours.data
@@ -124,8 +142,9 @@ def curriculum_detail(id):
 
 
 @curriculum_bp.route('/curriculums/<int:id>/delete', methods=['POST'])
+@login_required
 def delete_curriculum(id):
-    c = Curriculum.query.get_or_404(id)
+    c = Curriculum.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     c.archived = True
     c.status = 'archived'
     db.session.commit()
@@ -141,17 +160,20 @@ def list_projects():
 
 
 @curriculum_bp.route('/projects/<int:id>')
+@login_required
 def project_detail(id):
-    project = Project.query.get_or_404(id)
+    project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     curricula = project.curricula.filter_by(archived=False).order_by(Curriculum.created_at).all()
     return render_template('project/detail.html', project=project, curricula=curricula)
 
 
 @curriculum_bp.route('/projects/new', methods=['GET', 'POST'])
+@login_required
 def new_project():
     form = ProjectForm()
     if form.validate_on_submit():
         p = Project(
+            user_id=current_user.id,
             name=form.name.data,
             description=form.description.data,
             color=form.color.data or '#6366f1'
@@ -166,8 +188,9 @@ def new_project():
 # ── Item CRUD ────────────────────────────────────────────────────────────────
 
 @curriculum_bp.route('/curriculums/<int:id>/items', methods=['POST'])
+@login_required
 def add_item(id):
-    c = Curriculum.query.get_or_404(id)
+    c = Curriculum.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     title = request.form.get('title', '').strip()
     if not title:
         flash('Item title is required', 'error')
@@ -211,11 +234,22 @@ def add_item(id):
 
 
 @curriculum_bp.route('/curriculums/<int:cid>/items/<int:item_id>/complete', methods=['GET', 'POST'])
+@login_required
 def toggle_item(cid, item_id):
     """Use cid/item_id in the path so url_for(..., cid=, item_id=) never collides with reserved args."""
     if request.method == 'GET':
         return redirect(url_for('curriculum.curriculum_detail', id=cid) + '#items')
-    item = CurriculumItem.query.filter_by(id=item_id, curriculum_id=cid, deleted=False).first_or_404()
+    item = (
+        CurriculumItem.query
+        .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
+        .filter(
+            CurriculumItem.id == item_id,
+            CurriculumItem.curriculum_id == cid,
+            CurriculumItem.deleted.is_(False),
+            Curriculum.user_id == current_user.id,
+        )
+        .first_or_404()
+    )
     today = date.today()
     if item.item_kind == CurriculumItem.KIND_DAILY and item.is_time_threshold_daily():
         flash('This item completes automatically when today’s logged time on it meets or exceeds the target.', 'info')
@@ -236,8 +270,19 @@ def toggle_item(cid, item_id):
 
 
 @curriculum_bp.route('/curriculums/<int:id>/items/<int:iid>/edit', methods=['POST'])
+@login_required
 def edit_item(id, iid):
-    item = CurriculumItem.query.filter_by(id=iid, curriculum_id=id, deleted=False).first_or_404()
+    item = (
+        CurriculumItem.query
+        .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
+        .filter(
+            CurriculumItem.id == iid,
+            CurriculumItem.curriculum_id == id,
+            CurriculumItem.deleted.is_(False),
+            Curriculum.user_id == current_user.id,
+        )
+        .first_or_404()
+    )
     title = request.form.get('title', '').strip()
     if title:
         item.title = title
@@ -276,8 +321,18 @@ def edit_item(id, iid):
 
 
 @curriculum_bp.route('/curriculums/<int:id>/items/<int:iid>/delete', methods=['POST'])
+@login_required
 def delete_item(id, iid):
-    item = CurriculumItem.query.filter_by(id=iid, curriculum_id=id).first_or_404()
+    item = (
+        CurriculumItem.query
+        .join(Curriculum, CurriculumItem.curriculum_id == Curriculum.id)
+        .filter(
+            CurriculumItem.id == iid,
+            CurriculumItem.curriculum_id == id,
+            Curriculum.user_id == current_user.id,
+        )
+        .first_or_404()
+    )
     item.deleted = True
     db.session.commit()
     return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')

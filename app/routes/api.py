@@ -1,5 +1,6 @@
 from datetime import date
 from flask import Blueprint, jsonify, request
+from flask_login import login_required, current_user
 from app import db
 from app.models import Session, Curriculum, CurriculumItem
 from app.utils.stats import get_heatmap_data, get_velocity, get_projected_completion
@@ -8,15 +9,17 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
 @api_bp.route('/heatmap')
+@login_required
 def heatmap():
     project_id = request.args.get('project_id', type=int)
     curriculum_id = request.args.get('curriculum_id', type=int)
-    return jsonify(get_heatmap_data(project_id=project_id, curriculum_id=curriculum_id))
+    return jsonify(get_heatmap_data(user_id=current_user.id, project_id=project_id, curriculum_id=curriculum_id))
 
 
 @api_bp.route('/heatmap/<int:curriculum_id>')
+@login_required
 def heatmap_curriculum(curriculum_id):
-    return jsonify(get_heatmap_data(curriculum_id=curriculum_id))
+    return jsonify(get_heatmap_data(user_id=current_user.id, curriculum_id=curriculum_id))
 
 
 def _curriculum_requires_time_item(cid):
@@ -35,10 +38,14 @@ def _curriculum_requires_time_item(cid):
 
 
 @api_bp.route('/items')
+@login_required
 def items():
     """Return items for a curriculum (for dynamic dropdowns). Progress is time-based; all items stay listed."""
     curriculum_id = request.args.get('curriculum_id', type=int)
     if not curriculum_id:
+        return jsonify([])
+    curriculum = Curriculum.query.filter_by(id=curriculum_id, user_id=current_user.id, archived=False).first()
+    if not curriculum:
         return jsonify([])
     rows = (
         CurriculumItem.query
@@ -50,6 +57,7 @@ def items():
 
 
 @api_bp.route('/sessions/stop', methods=['POST'])
+@login_required
 def stop_timer():
     data = request.get_json(silent=True) or {}
     curriculum_id = data.get('curriculum_id')
@@ -66,7 +74,7 @@ def stop_timer():
         item = CurriculumItem.query.filter_by(id=int(item_id), deleted=False).first()
         if not item or not item.accepts_time_logging():
             return jsonify({'error': 'Invalid item'}), 400
-        curriculum = Curriculum.query.filter_by(id=item.curriculum_id, archived=False).first()
+        curriculum = Curriculum.query.filter_by(id=item.curriculum_id, user_id=current_user.id, archived=False).first()
         if not curriculum:
             return jsonify({'error': 'Invalid curriculum'}), 400
         if curriculum_id and int(curriculum_id) != curriculum.id:
@@ -74,7 +82,11 @@ def stop_timer():
         curriculum_id = curriculum.id
         item_id = item.id
     else:
-        curriculum = Curriculum.query.get(curriculum_id) if curriculum_id else None
+        curriculum = (
+            Curriculum.query.filter_by(id=curriculum_id, user_id=current_user.id, archived=False).first()
+            if curriculum_id
+            else None
+        )
         if not curriculum:
             return jsonify({'error': 'Invalid data'}), 400
         if _curriculum_requires_time_item(curriculum.id):
@@ -108,8 +120,9 @@ def stop_timer():
 
 
 @api_bp.route('/stats')
+@login_required
 def stats():
-    curricula = Curriculum.query.filter_by(archived=False).all()
+    curricula = Curriculum.query.filter_by(user_id=current_user.id, archived=False).all()
     result = []
     for c in curricula:
         velocity = get_velocity(c)

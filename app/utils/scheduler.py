@@ -9,40 +9,49 @@ _scheduler = BackgroundScheduler()
 def check_and_send_reminders(app):
     with app.app_context():
         from datetime import date, datetime
-        from app.models import Settings, Session
+        from app.models import Settings, Session, Curriculum
         from flask_mail import Message
         from app import mail
+        import os
 
-        settings = Settings.query.first()
-        if not settings or not settings.reminder_active:
-            return
-        if not settings.email or not settings.reminder_time:
-            return
+        base_url = os.environ.get('PUBLIC_BASE_URL') or os.environ.get('RENDER_EXTERNAL_URL') or ''
+        if base_url.endswith('/'):
+            base_url = base_url[:-1]
 
         now = datetime.utcnow()
-        if now.hour != settings.reminder_time.hour:
-            return
-
         today = date.today()
-        session_today = Session.query.filter(Session.logged_at == today).first()
-        if session_today is not None:
-            return  # Already logged something today
+        rows = Settings.query.filter_by(reminder_active=True).all()
+        for settings in rows:
+            if not settings.email or not settings.reminder_time:
+                continue
+            if now.hour != settings.reminder_time.hour:
+                continue
 
-        try:
-            msg = Message(
-                subject="Your curriculum awaits — no session logged today",
-                recipients=[settings.email],
-                body=(
-                    "Hey,\n\n"
-                    "You haven't logged any time today. Keep the streak alive!\n\n"
-                    "Open the app: http://localhost:5000/log\n\n"
-                    "— The Curriculum"
-                )
+            session_today = (
+                Session.query
+                .join(Curriculum, Session.curriculum_id == Curriculum.id)
+                .filter(Session.logged_at == today, Curriculum.user_id == settings.user_id)
+                .first()
             )
-            mail.send(msg)
-            logger.info("Sent daily reminder to %s", settings.email)
-        except Exception as exc:
-            logger.error("Failed to send reminder: %s", exc)
+            if session_today is not None:
+                continue  # Already logged something today
+
+            url = f"{base_url}/log" if base_url else "/log"
+            try:
+                msg = Message(
+                    subject="Your curriculum awaits — no session logged today",
+                    recipients=[settings.email],
+                    body=(
+                        "Hey,\n\n"
+                        "You haven't logged any time today. Keep the streak alive!\n\n"
+                        f"Open the app: {url}\n\n"
+                        "— The Curriculum"
+                    )
+                )
+                mail.send(msg)
+                logger.info("Sent daily reminder to %s", settings.email)
+            except Exception as exc:
+                logger.error("Failed to send reminder for %s: %s", settings.email, exc)
 
 
 def start_scheduler(app):

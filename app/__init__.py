@@ -1,14 +1,16 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from flask_mail import Mail
+from flask_login import LoginManager
 
 db = SQLAlchemy()
 migrate = Migrate()
 csrf = CSRFProtect()
 mail = Mail()
+login_manager = LoginManager()
 
 
 def create_app(config_class=None):
@@ -22,12 +24,33 @@ def create_app(config_class=None):
             config_class = DevelopmentConfig
 
     app.config.from_object(config_class)
+    # Used for Open Graph tags / absolute URLs in templates.
+    # Prefer explicit PUBLIC_BASE_URL, otherwise Render provides RENDER_EXTERNAL_URL.
+    app.config['PUBLIC_BASE_URL'] = os.environ.get('PUBLIC_BASE_URL') or os.environ.get('RENDER_EXTERNAL_URL') or ''
     os.makedirs(app.instance_path, exist_ok=True)
 
     db.init_app(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
     mail.init_app(app)
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import User
+        try:
+            return User.query.get(int(user_id))
+        except (TypeError, ValueError):
+            return None
+
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'authentication_required'}), 401
+        if request.accept_mimetypes.best == 'application/json':
+            return jsonify({'error': 'authentication_required'}), 401
+        return redirect(url_for('auth.login', next=request.full_path))
 
     # Register blueprints
     from app.routes.dashboard import dashboard_bp
@@ -35,17 +58,24 @@ def create_app(config_class=None):
     from app.routes.sessions import sessions_bp
     from app.routes.api import api_bp
     from app.routes.settings import settings_bp
+    from app.routes.auth import auth_bp
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(curriculum_bp)
     app.register_blueprint(sessions_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(auth_bp)
 
     # API routes don't need CSRF (JS clients use JSON)
     csrf.exempt(api_bp)
 
     # Jinja2 filters
+    @app.context_processor
+    def inject_public_base_url():
+        base = (app.config.get('PUBLIC_BASE_URL') or '').rstrip('/')
+        return {'public_base_url': base}
+
     @app.template_filter('duration')
     def duration_filter(minutes):
         if not minutes:
