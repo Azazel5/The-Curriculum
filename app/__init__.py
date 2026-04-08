@@ -15,8 +15,11 @@ def create_app(config_class=None):
     app = Flask(__name__, instance_relative_config=True)
 
     if config_class is None:
-        from config import DevelopmentConfig
-        config_class = DevelopmentConfig
+        from config import DevelopmentConfig, ProductionConfig
+        if os.environ.get('RENDER'):
+            config_class = ProductionConfig
+        else:
+            config_class = DevelopmentConfig
 
     app.config.from_object(config_class)
     os.makedirs(app.instance_path, exist_ok=True)

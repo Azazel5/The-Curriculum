@@ -83,17 +83,119 @@ If you use it honestly, it will feel slow. That’s the point. **Slowness is the
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+export FLASK_APP=app:create_app   # needed for `flask db …` CLI
 flask db upgrade             # apply migrations (SQLite in instance/ by default)
 python run.py                # http://127.0.0.1:5001
 ```
 
-Configuration loads from `config.py` (and optional `.env`). By default the database is `instance/curriculum.db`.
+Configuration loads from `config.py` (and optional `.env`). By default the database is `instance/curriculum.db`. To use Neon locally, set `DATABASE_URL` before `flask db upgrade` / `python run.py`.
+
+See `env.example` for variable names. **`DATABASE_URL`** switches the app to Postgres (Neon); if unset, SQLite is used.
+
+---
+
+## Deploy on Render + Neon (free tier)
+
+Production uses **Gunicorn** and **Postgres** (recommended: [Neon](https://neon.tech)). Render sets `RENDER` in the environment; the app then loads `ProductionConfig` (see `config.py` + `app/__init__.py`).
+
+### A. Neon (database) — run in browser
+
+1. Create a Neon account and a **project**.
+2. Create a **branch** (default `main` is fine) and copy the **connection string** for `psql` or ORMs. It should look like  
+   `postgresql://USER:PASSWORD@HOST/neondb?sslmode=require`  
+   If Neon shows `postgres://`, that is fine — the app normalizes it to `postgresql://`.
+
+**Where:** Neon dashboard only (no terminal required for DB creation).
+
+---
+
+### B. GitHub (code) — run on your machine
+
+```bash
+git add -A
+git commit -m "Prepare Render + Neon deploy"
+git push origin main   # or your default branch
+```
+
+**Where:** your laptop, in the repo folder.
+
+---
+
+### C. Render (host) — mostly browser; one Release Command
+
+1. [Render](https://render.com) → **New +** → **Web Service** → connect the GitHub repo.
+2. **Settings:**
+   - **Runtime:** Python 3
+   - **Build command:** `pip install -r requirements.txt`
+   - **Start command:** `gunicorn --bind 0.0.0.0:$PORT wsgi:app`
+   - **Instance type:** Free (cold starts are normal on free tier)
+
+3. **Environment** (Render → Environment → add variables):
+
+   | Key | Value |
+   |-----|--------|
+   | `DATABASE_URL` | Paste Neon’s connection string (with `sslmode=require` if Neon docs say so). |
+   | `SECRET_KEY` | Long random string (e.g. `python3 -c "import secrets; print(secrets.token_hex(32))"` on your machine). |
+   | `FLASK_APP` | `app:create_app` |
+
+   Optional (email reminders): `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER` — same as local `config.py`.
+
+4. **Release command** (migrations on every deploy — Render dashboard → *Settings* → *Build & Deploy* → *Release Command*):
+
+   ```bash
+   flask db upgrade
+   ```
+
+   Render runs this with the same env as the service, so `DATABASE_URL` and `FLASK_APP` must be set **before** the first successful release.
+
+**Where:** Render dashboard + copy-paste commands above.
+
+---
+
+### D. First deploy order
+
+1. Add env vars on Render (`DATABASE_URL`, `SECRET_KEY`, `FLASK_APP`).
+2. Save; let the **first build** finish.
+3. If the app starts before migrations ran, open **Manual Deploy** → **Clear build cache & deploy** after setting **Release Command** to `flask db upgrade`, or run migrations once from **Render Shell** (paid) / local against Neon:
+
+**One-time migrations from your laptop** (if Release Command is not available on free tier — check Render’s UI; many plans include it):
+
+```bash
+export FLASK_APP=app:create_app
+export DATABASE_URL='postgresql://...your-neon-url...'
+pip install -r requirements.txt
+flask db upgrade
+```
+
+**Where:** your laptop terminal (same `DATABASE_URL` as Render).
+
+---
+
+### E. After deploy
+
+- Open the Render **URL** (e.g. `https://your-service.onrender.com`).
+- Free web services **spin down** after idle; the first request may take ~30s.
+- **Backups:** rely on Neon’s retention for important data; export periodically if you outgrow free tier.
+
+---
+
+### Config reference (production)
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `RENDER` | Auto | Set by Render; selects `ProductionConfig`. |
+| `DATABASE_URL` | Yes (prod) | Neon Postgres URI. |
+| `SECRET_KEY` | Yes (prod) | Cookies / CSRF; must be stable across deploys. |
+| `FLASK_APP` | For CLI / Release | `app:create_app` for `flask db upgrade`. |
+
+Local development ignores `RENDER` and uses SQLite unless `DATABASE_URL` is set.
 
 ---
 
 ## Stack
 
 - Flask, SQLAlchemy, Flask-Migrate (Alembic), Flask-WTF, APScheduler (reminders), Flask-Mail (optional).
+- Production: **Gunicorn**, **psycopg2-binary** (Postgres / Neon).
 
 ---
 
