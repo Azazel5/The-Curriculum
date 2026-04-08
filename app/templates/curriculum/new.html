@@ -14,6 +14,11 @@
     {{ form.hidden_tag() }}
 
     <div>
+      {{ form.project_id.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+      {{ form.project_id(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors") }}
+    </div>
+
+    <div>
       {{ form.name.label(class="block text-sm font-medium text-gray-300 mb-2") }}
       {{ form.name(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors", placeholder="e.g. Anthropic Interview Prep") }}
       {% for e in form.name.errors %}<p class="text-red-400 text-xs mt-1">{{ e }}</p>{% endfor %}
@@ -22,6 +27,23 @@
     <div>
       {{ form.description.label(class="block text-sm font-medium text-gray-300 mb-2") }}
       {{ form.description(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors resize-none h-24", placeholder="What is this? What does success look like? (optional)") }}
+      <p class="text-xs text-gray-500 mt-2">Need a project first? <a href="/projects/new" class="text-green-400 hover:text-green-300">Create one</a>.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        {{ form.start_date.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+        {{ form.start_date(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors") }}
+      </div>
+      <div>
+        {{ form.target_completion_date.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+        {{ form.target_completion_date(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors") }}
+      </div>
+    </div>
+
+    <div>
+      {{ form.status.label(class="block text-sm font-medium text-gray-300 mb-2") }}
+      {{ form.status(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors") }}
     </div>
 
     <div>

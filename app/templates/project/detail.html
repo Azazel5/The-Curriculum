@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — Project — The Curriculum{% endblock %}
+
+{% block content %}
+<div class="mb-5">
+  <a href="/projects" class="text-gray-600 hover:text-gray-400 text-sm transition-colors">← Projects</a>
+</div>
+
+<div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
+  <div class="flex items-start gap-4">
+    <div class="flex-shrink-0 mt-1">
+      <div class="w-10 h-10 rounded-xl" style="background:{{ project.color }}"></div>
+    </div>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-2xl font-bold text-white">{{ project.name }}</h1>
+      {% if project.description %}
+      <p class="text-sm text-gray-400 mt-2">{{ project.description }}</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+  {% for c in curricula %}
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-colors">
+    <div class="flex items-start justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-4 h-4 rounded-full" style="background:{{ c.color }}"></div>
+        <div>
+          <h2 class="font-semibold text-white">{{ c.name }}</h2>
+          {% if c.description %}
+          <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">{{ c.description }}</p>
+          {% endif %}
+        </div>
+      </div>
+      <a href="/curriculums/{{ c.id }}" class="text-gray-400 text-xs hover:text-green-400 transition-colors">Open →</a>
+    </div>
+    <div class="text-xs text-gray-500 mb-3">{{ '%.1f'|format(c.total_hours) }}h / {{ c.mastery_hours|int }}h</div>
+    <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+      <div class="h-2 rounded-full progress-fill" style="width:{{ [c.progress_pct, 100]|min }}%; background:{{ c.color }}"></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

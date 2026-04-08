@@ -12,14 +12,29 @@ class Settings(db.Model):
     timezone = db.Column(db.String(50), default='UTC')
 
 
+class Project(db.Model):
+    __tablename__ = 'project'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    color = db.Column(db.String(7), default='#6366f1')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    curricula = db.relationship('Curriculum', backref='project', lazy='dynamic')
+
+
 class Curriculum(db.Model):
     """The habit itself — e.g. 'Anthropic Interview Prep'. Time is tracked at this level."""
     __tablename__ = 'curriculum'
     id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)
     mastery_hours = db.Column(db.Float, nullable=False, default=1000.0)
     color = db.Column(db.String(7), default='#6366f1')
+    status = db.Column(db.String(20), nullable=False, default='active')
+    start_date = db.Column(db.Date, nullable=True)
+    target_completion_date = db.Column(db.Date, nullable=True)
     archived = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

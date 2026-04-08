@@ -8,6 +8,7 @@ from wtforms.validators import DataRequired, Optional, NumberRange
 
 
 class CurriculumForm(FlaskForm):
+    project_id = SelectField('Project', coerce=int, validators=[Optional()])
     name = StringField('Name', validators=[DataRequired()])
     description = TextAreaField('Description', validators=[Optional()])
     mastery_hours = FloatField(
@@ -15,6 +16,20 @@ class CurriculumForm(FlaskForm):
         validators=[DataRequired(), NumberRange(min=1)],
         default=1000.0
     )
+    status = SelectField(
+        'Status',
+        choices=[('active', 'Active'), ('paused', 'Paused'), ('completed', 'Completed'), ('archived', 'Archived')],
+        default='active',
+        validators=[DataRequired()]
+    )
+    start_date = DateField('Start date', validators=[Optional()])
+    target_completion_date = DateField('Target completion', validators=[Optional()])
+    color = StringField('Color', default='#6366f1')
+
+
+class ProjectForm(FlaskForm):
+    name = StringField('Name', validators=[DataRequired()])
+    description = TextAreaField('Description', validators=[Optional()])
     color = StringField('Color', default='#6366f1')
 
 
