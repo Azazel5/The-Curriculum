@@ -4,6 +4,20 @@ from app import db
 from app.models import Session, Curriculum, CurriculumItem
 
 
+def _apply_scope(q, project_id=None, curriculum_id=None):
+    """
+    Apply optional scoping to a Session-based query.
+
+    - project_id scope joins Curriculum and filters Curriculum.project_id.
+    - curriculum_id scope filters Session.curriculum_id.
+    """
+    if project_id is not None:
+        q = q.join(Curriculum, Session.curriculum_id == Curriculum.id).filter(Curriculum.project_id == project_id)
+    if curriculum_id is not None:
+        q = q.filter(Session.curriculum_id == curriculum_id)
+    return q
+
+
 def _curriculum_has_active_items(curriculum_id):
     return (
         db.session.query(CurriculumItem.id)
@@ -42,7 +56,7 @@ def _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only):
     return total, active_days
 
 
-def get_heatmap_data(curriculum_id=None):
+def get_heatmap_data(project_id=None, curriculum_id=None):
     """Returns {date_str: total_minutes} for the last 365 days."""
     end = date.today()
     start = end - timedelta(days=364)
@@ -54,20 +68,25 @@ def get_heatmap_data(curriculum_id=None):
         )
         .filter(Session.logged_at >= start, Session.logged_at <= end)
     )
-    if curriculum_id is not None:
-        q = q.filter(Session.curriculum_id == curriculum_id)
+    q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
     q = q.group_by(Session.logged_at)
 
     return {row.logged_at.strftime('%Y-%m-%d'): row.total for row in q.all()}
 
 
-def get_streak():
+def _has_any_session_on(d, project_id=None, curriculum_id=None):
+    q = db.session.query(Session.id).filter(Session.logged_at == d)
+    q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+    return q.first() is not None
+
+
+def get_streak(project_id=None, curriculum_id=None):
     today = date.today()
-    has_today = db.session.query(Session.id).filter(Session.logged_at == today).first() is not None
+    has_today = _has_any_session_on(today, project_id=project_id, curriculum_id=curriculum_id)
     current = today if has_today else today - timedelta(days=1)
     streak = 0
     while True:
-        has = db.session.query(Session.id).filter(Session.logged_at == current).first() is not None
+        has = _has_any_session_on(current, project_id=project_id, curriculum_id=curriculum_id)
         if has:
             streak += 1
             current -= timedelta(days=1)
@@ -76,12 +95,10 @@ def get_streak():
     return streak
 
 
-def get_today_minutes():
-    result = (
-        db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
-        .filter(Session.logged_at == date.today())
-        .scalar()
-    )
+def get_today_minutes(project_id=None, curriculum_id=None):
+    q = db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0)).filter(Session.logged_at == date.today())
+    q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+    result = q.scalar()
     return result or 0
 
 
@@ -126,8 +143,12 @@ def get_projected_completion(curriculum):
     return date.today() + timedelta(days=max(days_needed, 0))
 
 
-def get_curriculum_time_distribution():
-    curricula = Curriculum.query.filter_by(archived=False).all()
+def get_curriculum_time_distribution(project_id=None):
+    """Returns list of {name,color,minutes} for curricula with time logged, optionally scoped to a project."""
+    curricula_q = Curriculum.query.filter_by(archived=False)
+    if project_id is not None:
+        curricula_q = curricula_q.filter(Curriculum.project_id == project_id)
+    curricula = curricula_q.all()
     result = []
     for c in curricula:
         total = (
@@ -140,14 +161,14 @@ def get_curriculum_time_distribution():
     return result
 
 
-def get_daily_breakdown(days=30):
+def get_daily_breakdown(days=30, project_id=None, curriculum_id=None):
     end = date.today()
     start = end - timedelta(days=days - 1)
-    rows = (
-        db.session.query(Session.logged_at, func.sum(Session.duration_minutes).label('total'))
-        .filter(Session.logged_at >= start, Session.logged_at <= end)
-        .group_by(Session.logged_at).all()
+    q = db.session.query(Session.logged_at, func.sum(Session.duration_minutes).label('total')).filter(
+        Session.logged_at >= start, Session.logged_at <= end
     )
+    q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+    rows = q.group_by(Session.logged_at).all()
     data = {row.logged_at: row.total for row in rows}
     result = []
     cur = start
@@ -157,16 +178,16 @@ def get_daily_breakdown(days=30):
     return result
 
 
-def get_weekly_breakdown(weeks=12):
+def get_weekly_breakdown(weeks=12, project_id=None, curriculum_id=None):
     result = []
     end = date.today()
     for i in range(weeks - 1, -1, -1):
         week_end = end - timedelta(weeks=i)
         week_start = week_end - timedelta(days=6)
-        total = (
-            db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
-            .filter(Session.logged_at >= week_start, Session.logged_at <= week_end)
-            .scalar()
-        ) or 0
+        q = db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0)).filter(
+            Session.logged_at >= week_start, Session.logged_at <= week_end
+        )
+        q = _apply_scope(q, project_id=project_id, curriculum_id=curriculum_id)
+        total = (q.scalar() or 0)
         result.append({'week': week_start.strftime('%b %d'), 'minutes': total})
     return result

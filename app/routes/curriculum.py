@@ -116,8 +116,9 @@ def delete_curriculum(id):
 
 @curriculum_bp.route('/projects')
 def list_projects():
-    projects = Project.query.order_by(Project.name).all()
-    return render_template('project/list.html', projects=projects)
+    # The dashboard (/) is the projects home. Keep this route for backwards
+    # compatibility and bookmarks, but avoid maintaining a duplicated page.
+    return redirect(url_for('dashboard.index'))
 
 
 @curriculum_bp.route('/projects/<int:id>')
@@ -139,7 +140,7 @@ def new_project():
         db.session.add(p)
         db.session.commit()
         flash(f'Created project "{p.name}"', 'success')
-        return redirect(url_for('curriculum.list_projects'))
+        return redirect(url_for('dashboard.index') + f'?project={p.id}')
     return render_template('project/new.html', form=form)
 
 

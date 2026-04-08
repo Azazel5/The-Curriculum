@@ -9,7 +9,9 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 @api_bp.route('/heatmap')
 def heatmap():
-    return jsonify(get_heatmap_data())
+    project_id = request.args.get('project_id', type=int)
+    curriculum_id = request.args.get('curriculum_id', type=int)
+    return jsonify(get_heatmap_data(project_id=project_id, curriculum_id=curriculum_id))
 
 
 @api_bp.route('/heatmap/<int:curriculum_id>')

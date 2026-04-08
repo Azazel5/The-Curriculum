@@ -1,39 +1,113 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — The Curriculum{% endblock %}
+{% block title %}Projects — The Curriculum{% endblock %}
 
 {% block content %}
 
-{# ── Header stats ─────────────────────────────────────────────────────────── #}
-<div class="flex flex-wrap items-center gap-6 mb-8">
-  <div class="flex items-center gap-3">
-    <span class="text-4xl font-black text-white tabular-nums">{{ streak }}</span>
-    <div>
-      <div class="text-xs text-gray-500 uppercase tracking-widest font-medium">day streak</div>
-      <div class="text-green-400 text-sm mt-0.5 tracking-wider">
-        {% for _ in range([streak, 7]|min) %}▰{% endfor %}{% if streak < 7 %}<span class="text-gray-800">{% for _ in range(7 - [streak,7]|min) %}▰{% endfor %}</span>{% endif %}
-      </div>
-    </div>
-  </div>
-  <div class="w-px h-10 bg-gray-800 hidden sm:block"></div>
+{# ── Header ───────────────────────────────────────────────────────────────── #}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
   <div>
-    {% set h = today_minutes // 60 %}{% set m = today_minutes % 60 %}
-    <span class="text-3xl font-bold text-white tabular-nums">{% if h %}{{ h }}h {% endif %}{{ m }}m</span>
-    <div class="text-xs text-gray-500 uppercase tracking-widest font-medium">today</div>
+    <h1 class="text-2xl font-bold text-white">Projects</h1>
+    <p class="text-gray-500 text-sm mt-1">Track streaks and time at the project level, then drill into curricula.</p>
   </div>
-  <div class="ml-auto flex gap-3">
+  <div class="flex gap-3">
+    <a href="/projects/new" class="text-gray-400 hover:text-white border border-gray-700 hover:border-gray-600 px-4 py-2 rounded-full text-sm transition-colors">
+      + New Project
+    </a>
     <a href="/log" class="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-full font-semibold text-sm transition-colors shadow-lg shadow-green-900/40">
       + Log Session
-    </a>
-    <a href="/insights" class="text-gray-400 hover:text-white border border-gray-700 hover:border-gray-600 px-4 py-2 rounded-full text-sm transition-colors">
-      Insights →
     </a>
   </div>
 </div>
 
+{# ── Filter controls ───────────────────────────────────────────────────────── #}
+<div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
+  <label class="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Project</label>
+  {# One row: select + button share the same height and vertical alignment #}
+  <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+    <select id="dashboard-project"
+            class="flex-1 min-w-0 h-11 bg-gray-800 border border-gray-700 rounded-xl px-4 text-sm text-white focus:outline-none focus:border-green-500 transition-colors">
+      <option value="">All projects</option>
+      {% for p in projects %}
+        <option value="{{ p.id }}" {% if selected_project and selected_project.id == p.id %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <a href="/curriculums"
+       class="inline-flex h-11 shrink-0 items-center justify-center whitespace-nowrap px-4 text-sm font-semibold text-gray-300 hover:text-white border border-gray-700 hover:border-gray-600 rounded-xl transition-colors">
+      Manage curriculums →
+    </a>
+  </div>
+  <div class="text-xs text-gray-600 mt-2">
+    {% if selected_project %}
+      Viewing <span class="text-gray-400 font-semibold">{{ selected_project.name }}</span>.
+      <a href="/" class="text-green-500 hover:text-green-400 ml-2">Clear</a>
+    {% else %}
+      Pick a project to focus the heatmap, today panel, and curricula list.
+    {% endif %}
+  </div>
+</div>
+
+{# ── Project cards ────────────────────────────────────────────────────────── #}
+{% set cards = project_cards|default([]) %}
+{% if cards %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8 items-stretch">
+  {% for row in cards %}
+  {% set p = row.project %}
+  {% set is_selected = selected_project and selected_project.id == p.id %}
+  <a href="/?project={{ p.id }}"
+     class="block bg-gray-900 border rounded-2xl p-5 hover:border-gray-700 transition-colors h-full
+            {% if is_selected %}border-green-700/60 shadow-lg shadow-green-900/20{% else %}border-gray-800{% endif %}">
+    <div class="flex items-start justify-between gap-4 h-full">
+      <div class="min-w-0">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5" style="background:{{ p.color }}"></div>
+          <div class="min-w-0">
+            <div class="text-white font-semibold truncate">{{ p.name }}</div>
+            {% if p.description %}
+            <div class="text-xs text-gray-600 mt-0.5 line-clamp-1">{{ p.description }}</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+          <span><span class="text-gray-400 font-mono">{{ p.curricula.filter_by(archived=False).count() }}</span> curricula</span>
+          <span><span class="text-gray-300 font-mono">{{ '%.1f'|format(p.total_hours) }}h</span> logged</span>
+        </div>
+      </div>
+
+      <div class="text-right flex-shrink-0">
+        <div class="text-xs text-gray-600 uppercase tracking-widest">streak</div>
+        <div class="text-2xl font-black text-white tabular-nums">{{ row.streak }}</div>
+        <div class="text-xs text-gray-600 mt-1 uppercase tracking-widest">today</div>
+        {% set ph = row.today_minutes // 60 %}{% set pm = row.today_minutes % 60 %}
+        <div class="text-sm font-mono text-green-400 font-semibold tabular-nums">{% if ph %}{{ ph }}h {% endif %}{{ pm }}m</div>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-gray-900 border border-dashed border-gray-700 rounded-2xl p-12 text-center mb-8">
+  <p class="text-gray-400 font-medium mb-2">No projects yet.</p>
+  <p class="text-gray-600 text-sm mb-6">Create a project to group multiple curricula together.</p>
+  <a href="/projects/new" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-full font-semibold text-sm transition-colors">
+    Create a project
+  </a>
+</div>
+{% endif %}
+
 {# ── Heatmap ──────────────────────────────────────────────────────────────── #}
 <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
   <div class="flex items-center justify-between mb-4">
-    <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest">Activity — last 365 days</h2>
+    <div>
+      <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest">Activity — last 365 days</h2>
+      <div class="text-xs text-gray-600 mt-1">
+        {% if selected_project %}
+          Scoped to <span class="text-gray-400 font-semibold">{{ selected_project.name }}</span>
+          <a href="/" class="text-green-500 hover:text-green-400 ml-2">Clear</a>
+        {% else %}
+          All projects
+        {% endif %}
+      </div>
+    </div>
     <div class="flex items-center gap-2 text-xs text-gray-600">
       <span>Less</span>
       <div class="flex gap-1 items-center">
@@ -52,6 +126,14 @@
 
   {# Curriculum cards — 2/3 width #}
   <div class="lg:col-span-2 space-y-4">
+    <div class="flex items-center justify-between">
+      <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+        {% if selected_project %}Curricula in {{ selected_project.name }}{% else %}Curricula{% endif %}
+      </h2>
+      {% if selected_project %}
+      <a href="/curriculums" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">View all →</a>
+      {% endif %}
+    </div>
 
     {% if not curricula %}
     <div class="bg-gray-900 border border-dashed border-gray-700 rounded-2xl p-10 text-center">
@@ -133,14 +215,18 @@
 
     {% if time_dist %}
     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Time Distribution</h3>
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">
+        Time Distribution{% if selected_project %} — {{ selected_project.name }}{% endif %}
+      </h3>
       <canvas id="pieChart" height="200"></canvas>
     </div>
     {% endif %}
 
     {# Today's sessions #}
     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Today</h3>
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">
+        Today{% if selected_project %} — {{ selected_project.name }}{% endif %}
+      </h3>
       {% if today_sessions %}
       <div>
         {% for s in today_sessions %}
@@ -180,7 +266,13 @@
 
 {% block scripts %}
 <script>
-  fetch('/api/heatmap').then(r => r.json()).then(data => renderHeatmap('heatmap-global', data));
+  const heatmapUrl = {% if selected_project %}`/api/heatmap?project_id={{ selected_project.id }}`{% else %}`/api/heatmap`{% endif %};
+  fetch(heatmapUrl).then(r => r.json()).then(data => renderHeatmap('heatmap-global', data));
+
+  document.getElementById('dashboard-project')?.addEventListener('change', (e) => {
+    const v = e.target.value;
+    window.location = v ? (`/?project=${v}`) : '/';
+  });
 
   {% if time_dist %}
   new Chart(document.getElementById('pieChart').getContext('2d'), {
