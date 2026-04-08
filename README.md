@@ -66,25 +66,6 @@ One-time items stay **manual** complete only.
 
 ---
 
-## Accounts & privacy (public deploy safe)
-
-If you deploy this publicly, **your data is private by default**:
-
-- **Every user has their own dataset**: `project.user_id`, `curriculum.user_id`, and `settings.user_id` scope all views and writes.
-- **Login is required** for all app routes and APIs (dashboard, curriculum pages, log time, insights, settings, heatmap endpoints).
-- **Guests are isolated**: “Continue as guest” creates a new `app_user` row with `is_guest=true`. It’s a sandbox; nobody can see or edit anyone else’s projects/curricula/sessions.
-
-### Claiming legacy data after enabling accounts
-
-When you first add accounts to an existing database, migrations create a **legacy owner** user (`app_user.id = 1`) and assign all existing rows to it. Then you claim it once:
-
-- Visit **`/setup`** and set your email + password.
-- After you claim it, `id=1` becomes your normal personal account and **`/setup` becomes inert** (it redirects if already claimed).
-
-This keeps your existing data while still preventing strangers from editing it.
-
----
-
 ## A lesson in humility: what 1000 hours really is
 
 People throw around “10,000 hours” or even “1,000 hours” as if they’re ticket prices. They’re not. They’re **life**.
