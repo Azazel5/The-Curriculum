@@ -124,13 +124,21 @@
       {% if velocity > 0 %}
       <div class="text-center">
         <div class="text-xl font-bold font-mono text-white">{{ '%.2f'|format(velocity) }}h</div>
-        <div class="text-xs text-gray-500 mt-0.5">per day (30d)</div>
+        <div class="text-xs text-gray-500 mt-0.5 max-w-[10rem] mx-auto leading-tight">avg per day you logged (last 30d)</div>
       </div>
       {% endif %}
       {% if projected %}
-      <div class="text-center">
+      <div class="text-center max-w-[11rem]">
         <div class="text-sm font-semibold text-gray-300">{{ projected.strftime('%b %d, %Y') }}</div>
-        <div class="text-xs text-gray-500 mt-0.5">est. completion</div>
+        <div class="text-xs text-gray-500 mt-0.5 leading-tight">est. if this pace holds</div>
+        {% if curriculum.target_completion_date %}
+          {% set gap = (projected - curriculum.target_completion_date).days %}
+          {% if gap <= 0 %}
+            <div class="text-xs text-green-500 mt-1.5 leading-tight">Target {{ curriculum.target_completion_date.strftime('%b %d, %Y') }}: at or before</div>
+          {% else %}
+            <div class="text-xs text-orange-400 mt-1.5 leading-tight">{{ gap }} days after your target ({{ curriculum.target_completion_date.strftime('%b %d, %Y') }})</div>
+          {% endif %}
+        {% endif %}
       </div>
       {% endif %}
       <div class="ml-auto self-center">

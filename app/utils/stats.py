@@ -1,7 +1,45 @@
 from datetime import date, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from app import db
-from app.models import Session, Curriculum
+from app.models import Session, Curriculum, CurriculumItem
+
+
+def _curriculum_has_active_items(curriculum_id):
+    return (
+        db.session.query(CurriculumItem.id)
+        .filter(
+            CurriculumItem.curriculum_id == curriculum_id,
+            CurriculumItem.deleted.is_(False),
+        )
+        .first()
+        is not None
+    )
+
+
+def _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only):
+    """Total minutes and count of distinct days with sessions in [start, end]."""
+    filters = [
+        Session.curriculum_id == curriculum_id,
+        Session.logged_at >= start,
+        Session.logged_at <= end,
+    ]
+    if item_tagged_only:
+        filters.append(Session.item_id.isnot(None))
+
+    total = (
+        db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
+        .filter(and_(*filters))
+        .scalar()
+    )
+    total = total or 0
+
+    active_days = (
+        db.session.query(func.count(func.distinct(Session.logged_at)))
+        .filter(and_(*filters))
+        .scalar()
+    )
+    active_days = active_days or 0
+    return total, active_days
 
 
 def get_heatmap_data(curriculum_id=None):
@@ -48,15 +86,33 @@ def get_today_minutes():
 
 
 def get_velocity(curriculum, days=30):
-    """Average hours per day over last N days."""
+    """
+    Average hours **per day you actually logged time** in the trailing window.
+
+    Total hours in the window ÷ number of distinct calendar days with ≥1 session.
+    When the curriculum has roadmap items, uses **item-tagged** sessions first;
+    if none in the window, uses all sessions for that curriculum.
+    Idle days do not pull this average toward zero.
+    """
     end = date.today()
     start = end - timedelta(days=days)
-    total_minutes = (
-        db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
-        .filter(Session.curriculum_id == curriculum.id, Session.logged_at >= start)
-        .scalar()
-    ) or 0
-    return (total_minutes / 60.0) / days
+
+    if _curriculum_has_active_items(curriculum.id):
+        total_minutes, active_days = _sum_and_active_days_minutes(
+            curriculum.id, start, end, item_tagged_only=True
+        )
+        if total_minutes == 0:
+            total_minutes, active_days = _sum_and_active_days_minutes(
+                curriculum.id, start, end, item_tagged_only=False
+            )
+    else:
+        total_minutes, active_days = _sum_and_active_days_minutes(
+            curriculum.id, start, end, item_tagged_only=False
+        )
+
+    if active_days == 0:
+        return 0.0
+    return (total_minutes / 60.0) / active_days
 
 
 def get_projected_completion(curriculum):
@@ -66,7 +122,8 @@ def get_projected_completion(curriculum):
     remaining = max(curriculum.mastery_hours - curriculum.total_hours, 0)
     if remaining <= 0:
         return date.today()
-    return date.today() + timedelta(days=int(remaining / velocity))
+    days_needed = int(remaining / velocity)
+    return date.today() + timedelta(days=max(days_needed, 0))
 
 
 def get_curriculum_time_distribution():
