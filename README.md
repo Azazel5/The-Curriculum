@@ -22,7 +22,7 @@ The mental model is strict top-down:
 |--------|------------|------|
 | **Project** | North Star / theme | The parent bucket. Groups related curricula (e.g. “Deep learning expertise,” “Interview prep”). **The home dashboard (`/`) is your projects control center**: see projects, create them, filter by project, and see project-level streaks and activity. |
 | **Curriculum** | The habit or arena | Where your **mastery target** lives (often **~1000 hours**) and where **sessions** attach. Progress % and hours roll up here and into the parent project. |
-| **Item** | Roadmap row | Concrete work: papers, drills, loops. You log time on the curriculum and **tag the item** when the curriculum has items—so you can see **where time actually went**. Completion is **manual** (one-shot or daily reset). |
+| **Item** | Roadmap row | Concrete work: papers, drills, loops. Items come in **one-time** and **daily** forms (presence or time-target). Completion is **manual** (one-shot or daily presence) or **automatic** (daily time target). |
 
 **Project > Curriculum > Item** is the spine: if you’re “working every day” but one project never gets heatmap color, or one curriculum inside a project is flat, the app is designed to make that visible—not to average it away.
 
@@ -51,7 +51,7 @@ The app is built so you can spot **slacking or blind spots** without hand-waving
 ## Time logging (source of truth)
 
 - **Sessions** are the ledger. Every log adds minutes to the **curriculum** and rolls up to the **project** when the curriculum belongs to one.
-- If a curriculum has roadmap items, you **tag the item** so per-item stats and views stay honest.
+- If a curriculum has **daily time-target items**, you **tag the item** when logging time so per-item stats stay honest. (One-time and daily-presence items are checkmarks, not time ledgers.)
 - **Manual entry** and the **stopwatch** on Log Time both write the same session type.
 - Archiving structure doesn’t erase history until you delete sessions.
 
@@ -63,6 +63,25 @@ The app is built so you can spot **slacking or blind spots** without hand-waving
 - **Time target (automatic):** You set **minutes required today on that item**. The checkmark turns on when **today’s sessions tagged to that item** sum to **≥ that target** (manual log or timer). You cannot manually toggle the check; log time to complete.
 
 One-time items stay **manual** complete only.
+
+---
+
+## Accounts & privacy (public deploy safe)
+
+If you deploy this publicly, **your data is private by default**:
+
+- **Every user has their own dataset**: `project.user_id`, `curriculum.user_id`, and `settings.user_id` scope all views and writes.
+- **Login is required** for all app routes and APIs (dashboard, curriculum pages, log time, insights, settings, heatmap endpoints).
+- **Guests are isolated**: “Continue as guest” creates a new `app_user` row with `is_guest=true`. It’s a sandbox; nobody can see or edit anyone else’s projects/curricula/sessions.
+
+### Claiming legacy data after enabling accounts
+
+When you first add accounts to an existing database, migrations create a **legacy owner** user (`app_user.id = 1`) and assign all existing rows to it. Then you claim it once:
+
+- Visit **`/setup`** and set your email + password.
+- After you claim it, `id=1` becomes your normal personal account and **`/setup` becomes inert** (it redirects if already claimed).
+
+This keeps your existing data while still preventing strangers from editing it.
 
 ---
 
@@ -144,6 +163,7 @@ git push origin main   # or your default branch
    | `DATABASE_URL` | Paste Neon’s connection string (with `sslmode=require` if Neon docs say so). |
    | `SECRET_KEY` | Long random string (e.g. `python3 -c "import secrets; print(secrets.token_hex(32))"` on your machine). |
    | `FLASK_APP` | `app:create_app` |
+   | `PUBLIC_BASE_URL` | Optional but recommended: your public URL (e.g. `https://the-curriculum.onrender.com`). Used for Open Graph link previews. |
 
    Optional (email reminders): `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER` — same as local `config.py`.
 
@@ -194,6 +214,7 @@ flask db upgrade
 | `DATABASE_URL` | Yes (prod) | Neon Postgres URI. |
 | `SECRET_KEY` | Yes (prod) | Cookies / CSRF; must be stable across deploys. |
 | `FLASK_APP` | For CLI / Release | `app:create_app` for `flask db upgrade`. |
+| `PUBLIC_BASE_URL` | Optional | Public app URL for absolute links / Open Graph previews. Render may also provide `RENDER_EXTERNAL_URL`. |
 
 Local development ignores `RENDER` and uses SQLite unless `DATABASE_URL` is set.
 
