@@ -1,44 +1,41 @@
-# fly.toml app configuration file
+# fly.toml app configuration file generated for the-curriculum on 2026-04-09T13:20:10-04:00
 #
-# Create with: fly launch
-# Deploy with: fly deploy
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# NOTE: Replace app name after `fly launch`, or let flyctl manage it.
 
-app = "the-curriculum"
-primary_region = "iad"
+app = 'the-curriculum'
+primary_region = 'iad'
 
 [build]
-  dockerfile = "Dockerfile"
-
-[env]
-  # Required for migration command and any CLI usage.
-  FLASK_APP = "app:create_app"
-
-  # Optional but recommended so Open Graph + email links become absolute.
-  # Prefer setting this as a secret if you want to keep config centralized.
-  # PUBLIC_BASE_URL = "https://the-curriculum.fly.dev"
+  dockerfile = 'Dockerfile'
 
 [deploy]
-  # Runs on each deploy before the new VM is promoted.
-  release_command = "flask db upgrade"
+  release_command = 'flask db upgrade'
+
+[env]
+  FLASK_APP = 'app:create_app'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "off"
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
 
   [http_service.concurrency]
-    type = "connections"
+    type = 'connections'
     hard_limit = 50
     soft_limit = 25
 
   [[http_service.checks]]
-    interval = "15s"
-    timeout = "2s"
-    grace_period = "20s"
-    method = "GET"
-    path = "/login"
+    interval = '15s'
+    timeout = '2s'
+    grace_period = '20s'
+    method = 'GET'
+    path = '/login'
 
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
