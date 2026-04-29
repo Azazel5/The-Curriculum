@@ -43,7 +43,7 @@
         {% for row in recurring_focus %}
         {% set item = row.item %}
         {% set curriculum = row.curriculum %}
-        <div class="rounded-lg border border-gray-800 bg-gray-900/70 px-3 py-2.5">
+        <div class="rounded-lg border border-gray-800 bg-gray-900/70 px-3 py-2.5 {% if loop.index > 5 %}hidden recurring-extra{% endif %}">
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <div class="text-sm text-white font-medium truncate">{{ item.title }}</div>
@@ -65,6 +65,14 @@
         </div>
         {% endfor %}
       </div>
+      {% if recurring_focus|length > 5 %}
+      <button id="toggle-recurring-focus"
+              type="button"
+              class="mt-3 text-xs text-green-400 hover:text-green-300 font-semibold transition-colors"
+              data-expanded="false">
+        Show {{ recurring_focus|length - 5 }} more
+      </button>
+      {% endif %}
       {% else %}
       <p class="text-xs text-gray-600">No recurring tasks need work right now.</p>
       {% endif %}
@@ -80,7 +88,7 @@
         {% for row in one_time_focus %}
         {% set item = row.item %}
         {% set curriculum = row.curriculum %}
-        <div class="rounded-lg border {% if row.deadline_delta < 0 %}border-red-800{% elif row.deadline_delta <= 2 %}border-orange-800{% else %}border-gray-800{% endif %} bg-gray-900/70 px-3 py-2.5">
+        <div class="rounded-lg border {% if row.deadline_delta < 0 %}border-red-800{% elif row.deadline_delta <= 2 %}border-orange-800{% else %}border-gray-800{% endif %} bg-gray-900/70 px-3 py-2.5 {% if loop.index > 5 %}hidden onetime-extra{% endif %}">
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <div class="text-sm text-white font-medium truncate">{{ item.title }}</div>
@@ -100,6 +108,14 @@
         </div>
         {% endfor %}
       </div>
+      {% if one_time_focus|length > 5 %}
+      <button id="toggle-onetime-focus"
+              type="button"
+              class="mt-3 text-xs text-green-400 hover:text-green-300 font-semibold transition-colors"
+              data-expanded="false">
+        Show {{ one_time_focus|length - 5 }} more
+      </button>
+      {% endif %}
       {% else %}
       <p class="text-xs text-gray-600">No open one-time tasks.</p>
       {% endif %}
@@ -368,6 +384,21 @@
     const v = e.target.value;
     window.location = v ? (`/?project=${v}`) : '/';
   });
+
+  function initFocusToggle(buttonId, rowSelector, hiddenCount) {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    const rows = document.querySelectorAll(rowSelector);
+    button.addEventListener('click', () => {
+      const expanded = button.dataset.expanded === 'true';
+      rows.forEach((row) => row.classList.toggle('hidden', expanded));
+      button.dataset.expanded = expanded ? 'false' : 'true';
+      button.textContent = expanded ? `Show ${hiddenCount} more` : 'Collapse';
+    });
+  }
+
+  initFocusToggle('toggle-recurring-focus', '.recurring-extra', {{ [recurring_focus|length - 5, 0]|max }});
+  initFocusToggle('toggle-onetime-focus', '.onetime-extra', {{ [one_time_focus|length - 5, 0]|max }});
 
   {% if time_dist %}
   new Chart(document.getElementById('pieChart').getContext('2d'), {
