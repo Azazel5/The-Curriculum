@@ -7,18 +7,18 @@
 
   {# Tab switcher #}
   <div class="flex gap-1 bg-gray-900 rounded-xl p-1 mb-8 border border-gray-800">
-    <button id="tab-manual-btn" onclick="switchTab('manual')"
-            class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors bg-gray-800 text-white">
-      Manual Entry
-    </button>
     <button id="tab-timer-btn" onclick="switchTab('timer')"
-            class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors text-gray-500">
+            class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors bg-gray-800 text-white">
       Stopwatch Timer
+    </button>
+    <button id="tab-manual-btn" onclick="switchTab('manual')"
+            class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors text-gray-500">
+      Manual Entry
     </button>
   </div>
 
   {# ── Manual entry ──────────────────────────────────────────────────────── #}
-  <div id="panel-manual">
+  <div id="panel-manual" class="hidden">
     <form method="POST" action="/log" class="space-y-5">
       {{ form.hidden_tag() }}
 
@@ -91,7 +91,7 @@
   </div>
 
   {# ── Timer ─────────────────────────────────────────────────────────────── #}
-  <div id="panel-timer" class="hidden space-y-5">
+  <div id="panel-timer" class="space-y-5">
 
     <div>
       <label class="block text-sm font-medium text-gray-300 mb-2">Curriculum</label>
@@ -99,7 +99,7 @@
               class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors">
         <option value="">— Select curriculum —</option>
         {% for c in curricula %}
-        <option value="{{ c.id }}">{{ c.name }}</option>
+        <option value="{{ c.id }}" {% if form.curriculum_id.data == c.id %}selected{% endif %}>{{ c.name }}</option>
         {% endfor %}
       </select>
     </div>
@@ -179,6 +179,9 @@
   }
 
   const prefillItemId = {{ form.item_id.data | tojson }};
+  const url = new URL(window.location.href);
+  const paramCurriculumId = url.searchParams.get('curriculum');
+  const paramItemId = url.searchParams.get('item');
 
   document.getElementById('manual-curriculum').addEventListener('change', function() {
     loadItems(this.value, document.getElementById('manual-item'));
@@ -200,13 +203,31 @@
       const s = JSON.parse(localStorage.getItem('tc_timer'));
       const tCurr = document.getElementById('timer-curriculum');
       const tItem = document.getElementById('timer-item');
+      const hasParams = Boolean(paramCurriculumId || paramItemId);
+
+      // If we arrive with ?item=... or ?curriculum=..., we want Stopwatch as the default
+      // and we should prefill the timer selects too.
+      if (hasParams && tCurr && tItem) {
+        if (paramCurriculumId) tCurr.value = String(paramCurriculumId);
+        else if (tCurr.value) tCurr.value = String(tCurr.value);
+        loadItems(tCurr.value, tItem).then(() => {
+          if (paramItemId) tItem.value = String(paramItemId);
+        });
+        switchTab('timer');
+        return;
+      }
+
+      // Otherwise, restore an in-progress timer session if present.
       if (s && s.curriculum_id && tCurr && tItem) {
         tCurr.value = String(s.curriculum_id);
         loadItems(s.curriculum_id, tItem).then(() => {
           if (s.item_id) tItem.value = String(s.item_id);
         });
+        if (s.running || s.paused_seconds > 0) switchTab('timer');
+      } else {
+        // Default view is Stopwatch.
+        switchTab('timer');
       }
-      if (s && (s.running || s.paused_seconds > 0)) switchTab('timer');
     } catch {}
   })();
 </script>
