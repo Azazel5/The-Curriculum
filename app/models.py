@@ -89,22 +89,11 @@ class Curriculum(db.Model):
 
     @property
     def total_minutes(self):
-        q = (
+        result = (
             db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
             .filter(Session.curriculum_id == self.id)
+            .scalar()
         )
-        if curriculum_scopes_mastery_to_time_items(self.id):
-            q = q.outerjoin(CurriculumItem, Session.item_id == CurriculumItem.id).filter(
-                or_(
-                    Session.item_id.is_(None),
-                    and_(
-                        CurriculumItem.deleted.is_(False),
-                        CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
-                        CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
-                    ),
-                )
-            )
-        result = q.scalar()
         return result or 0
 
     @property
@@ -129,7 +118,7 @@ class Curriculum(db.Model):
 
 
 class CurriculumItem(db.Model):
-    """Roadmap row: sessions log time. Daily items are either presence (manual check) or time_threshold (auto when today’s minutes ≥ target)."""
+    """Roadmap row with two task types: recurring daily and one-time, both time-loggable."""
 
     __tablename__ = 'curriculum_item'
     KIND_ONE_SHOT = 'one_shot'
@@ -146,6 +135,7 @@ class CurriculumItem(db.Model):
     item_kind = db.Column(db.String(20), nullable=False, default=KIND_ONE_SHOT)
     completion_style = db.Column(db.String(20), nullable=False, default=STYLE_PRESENCE)
     daily_target_minutes = db.Column(db.Integer, nullable=True)  # daily + time_threshold: bar for “done today”
+    one_time_target_minutes = db.Column(db.Integer, nullable=True)  # one-time: cumulative minutes needed
     completed = db.Column(db.Boolean, default=False)  # one_shot: manual done
     completed_at = db.Column(db.DateTime, nullable=True)
     daily_completed_on = db.Column(db.Date, nullable=True)  # daily + presence: manual check for today
@@ -184,35 +174,45 @@ class CurriculumItem(db.Model):
             and self.completion_style == self.STYLE_TIME_THRESHOLD
         )
 
+    @property
+    def total_minutes_logged(self):
+        result = (
+            db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0))
+            .filter(Session.item_id == self.id)
+            .scalar()
+        )
+        return int(result or 0)
+
     def is_complete_for_stats(self, today=None):
         """Whether this item counts toward curriculum roadmap “done” count for ``today``."""
         today = today or local_today_for_user(self.curriculum.user)
         if self.item_kind == self.KIND_DAILY:
-            if self.completion_style == self.STYLE_TIME_THRESHOLD:
-                tgt = self.daily_target_minutes
-                if tgt is None or tgt < 1:
-                    return False
-                return self.minutes_logged_on(today) >= tgt
-            return self.daily_completed_on == today
-        return bool(self.completed)
+            tgt = self.daily_target_minutes
+            if tgt is None or tgt < 1:
+                # Legacy fallback for older "presence" records.
+                return self.daily_completed_on == today
+            return self.minutes_logged_on(today) >= tgt
+        return self.is_one_shot_done
 
     @property
     def is_one_shot_done(self):
         if self.item_kind != self.KIND_ONE_SHOT:
             return False
-        return bool(self.completed)
+        tgt = self.one_time_target_minutes
+        if tgt is None or tgt < 1:
+            # Legacy fallback for pre-target one-time rows.
+            return bool(self.completed)
+        return self.total_minutes_logged >= tgt
 
     @property
     def is_daily_done_today(self):
         if self.item_kind != self.KIND_DAILY:
             return False
         today = local_today_for_user(self.curriculum.user)
-        if self.completion_style == self.STYLE_TIME_THRESHOLD:
-            tgt = self.daily_target_minutes
-            if tgt is None or tgt < 1:
-                return False
-            return self.minutes_logged_on(today) >= tgt
-        return self.daily_completed_on == today
+        tgt = self.daily_target_minutes
+        if tgt is None or tgt < 1:
+            return self.daily_completed_on == today
+        return self.minutes_logged_on(today) >= tgt
 
     @property
     def is_pending_in_roadmap(self):
@@ -241,8 +241,8 @@ class CurriculumItem(db.Model):
         return None
 
     def accepts_time_logging(self):
-        """Only recurring time-target dailies use the session ledger for this item."""
-        return self.is_time_threshold_daily()
+        """Both recurring and one-time tasks are time-loggable in the simplified model."""
+        return True
 
 
 def curriculum_scopes_mastery_to_time_items(curriculum_id):

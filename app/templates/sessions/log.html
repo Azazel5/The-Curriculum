@@ -3,7 +3,7 @@
 {% block content %}
 <div class="max-w-xl mx-auto">
   <h1 class="text-2xl font-bold text-white mb-2">Log Time</h1>
-  <p class="text-gray-500 text-sm mb-6">Logged time applies to <span class="text-gray-400">mastery</span> for curricula that have daily <span class="text-gray-400">time-target</span> rows — then pick that row when you log. One-time and presence-daily items use ✓ on the curriculum page instead.</p>
+  <p class="text-gray-500 text-sm mb-6">Both recurring and one-time tasks are time-loggable. Pick the task you worked on so your bottlenecks stay precise. Tasks auto-complete from logged minutes.</p>
 
   {# Tab switcher #}
   <div class="flex gap-1 bg-gray-900 rounded-xl p-1 mb-8 border border-gray-800">
@@ -38,7 +38,7 @@
 
       <div>
         <label class="block text-sm font-medium text-gray-300 mb-2">
-          Item <span class="text-gray-600 font-normal text-xs">(required when this curriculum has time-target dailies)</span>
+          Item <span class="text-gray-600 font-normal text-xs">(required when this curriculum has any tasks)</span>
         </label>
         <select name="item_id" id="manual-item"
                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-400 focus:outline-none focus:border-green-500 transition-colors">
@@ -105,7 +105,7 @@
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-300 mb-2">Item <span class="text-gray-600 font-normal text-xs">(required when curriculum has time-target dailies)</span></label>
+      <label class="block text-sm font-medium text-gray-300 mb-2">Item <span class="text-gray-600 font-normal text-xs">(required when curriculum has any tasks)</span></label>
       <select id="timer-item"
               class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-400 focus:outline-none focus:border-green-500 transition-colors">
         <option value="">— choose curriculum first —</option>

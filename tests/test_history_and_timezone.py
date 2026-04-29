@@ -55,7 +55,7 @@ class HistoryAndTimezoneTests(unittest.TestCase):
         self.assertEqual(local_today('America/New_York', now=utc_now), date(2026, 4, 28))
         self.assertEqual(local_today('UTC', now=utc_now), date(2026, 4, 29))
 
-    def test_log_page_renders_time_target_items_for_selected_curriculum(self):
+    def test_log_page_renders_recurring_and_one_time_items_for_selected_curriculum(self):
         item = CurriculumItem(
             curriculum_id=self.curriculum.id,
             title='Activation Patching',
@@ -63,7 +63,15 @@ class HistoryAndTimezoneTests(unittest.TestCase):
             completion_style=CurriculumItem.STYLE_TIME_THRESHOLD,
             daily_target_minutes=30,
         )
+        one_time = CurriculumItem(
+            curriculum_id=self.curriculum.id,
+            title='Set Up LLC',
+            item_kind=CurriculumItem.KIND_ONE_SHOT,
+            completion_style=CurriculumItem.STYLE_PRESENCE,
+            one_time_target_minutes=120,
+        )
         db.session.add(item)
+        db.session.add(one_time)
         db.session.commit()
 
         response = self.client.get(f'/log?curriculum={self.curriculum.id}')
@@ -71,7 +79,36 @@ class HistoryAndTimezoneTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('Activation Patching', body)
+        self.assertIn('Set Up LLC', body)
         self.assertIn('<select name="item_id" id="manual-item"', body)
+
+    def test_one_time_item_completes_from_total_minutes(self):
+        item = CurriculumItem(
+            curriculum_id=self.curriculum.id,
+            title='Set Up Business Process',
+            item_kind=CurriculumItem.KIND_ONE_SHOT,
+            completion_style=CurriculumItem.STYLE_PRESENCE,
+            one_time_target_minutes=90,
+        )
+        db.session.add(item)
+        db.session.flush()
+        db.session.add(Session(
+            curriculum_id=self.curriculum.id,
+            item_id=item.id,
+            duration_minutes=60,
+            logged_at=date(2026, 4, 28),
+            source='manual',
+        ))
+        db.session.add(Session(
+            curriculum_id=self.curriculum.id,
+            item_id=item.id,
+            duration_minutes=30,
+            logged_at=date(2026, 4, 29),
+            source='timer',
+        ))
+        db.session.commit()
+        self.assertTrue(item.is_one_shot_done)
+        self.assertTrue(item.is_complete_for_stats(date(2026, 4, 29)))
 
     def test_history_csv_includes_notes_and_progress(self):
         db.session.add_all([
@@ -123,6 +160,28 @@ class HistoryAndTimezoneTests(unittest.TestCase):
 
         with patch('app.models.local_today_for_user', return_value=date(2026, 4, 28)):
             self.assertEqual(self.curriculum.completed_items_count, 1)
+
+    def test_api_items_includes_one_time_item(self):
+        db.session.add(CurriculumItem(
+            curriculum_id=self.curriculum.id,
+            title='Recurring Practice',
+            item_kind=CurriculumItem.KIND_DAILY,
+            completion_style=CurriculumItem.STYLE_TIME_THRESHOLD,
+            daily_target_minutes=30,
+        ))
+        db.session.add(CurriculumItem(
+            curriculum_id=self.curriculum.id,
+            title='One-time Milestone',
+            item_kind=CurriculumItem.KIND_ONE_SHOT,
+            completion_style=CurriculumItem.STYLE_PRESENCE,
+            one_time_target_minutes=120,
+        ))
+        db.session.commit()
+        response = self.client.get(f'/api/items?curriculum_id={self.curriculum.id}')
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Recurring Practice', body)
+        self.assertIn('One-time Milestone', body)
 
 
 if __name__ == '__main__':

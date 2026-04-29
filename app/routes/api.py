@@ -33,14 +33,12 @@ def heatmap_curriculum(curriculum_id):
 
 
 def _curriculum_requires_time_item(cid):
-    """Timer / API must tag sessions when the curriculum has daily time-target rows."""
+    """Timer/API requires item selection whenever active roadmap rows exist."""
     return (
         CurriculumItem.query
         .filter(
             CurriculumItem.curriculum_id == cid,
             CurriculumItem.deleted.is_(False),
-            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
-            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
         )
         .first()
         is not None
@@ -50,7 +48,7 @@ def _curriculum_requires_time_item(cid):
 @api_bp.route('/items')
 @login_required
 def items():
-    """Return items for a curriculum (for dynamic dropdowns). Progress is time-based; all items stay listed."""
+    """Return active roadmap items for a curriculum (dynamic dropdowns)."""
     curriculum_id = request.args.get('curriculum_id', type=int)
     if not curriculum_id:
         return jsonify([])
@@ -100,7 +98,7 @@ def stop_timer():
         if not curriculum:
             return jsonify({'error': 'Invalid data'}), 400
         if _curriculum_requires_time_item(curriculum.id):
-            return jsonify({'error': 'Select a time-tracked item for this curriculum'}), 400
+            return jsonify({'error': 'Select an item to log time for this curriculum'}), 400
         item_id = None
 
     try:

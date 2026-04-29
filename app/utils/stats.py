@@ -6,7 +6,6 @@ from app.models import (
     Curriculum,
     CurriculumItem,
     ItemActivityDay,
-    curriculum_scopes_mastery_to_time_items,
 )
 from app.utils.dates import local_today_for_user
 
@@ -41,19 +40,7 @@ def _curriculum_has_active_items(curriculum_id):
     )
 
 
-def _mastery_session_filter():
-    """Sessions that count toward mastery when curriculum scopes to time-target dailies."""
-    return or_(
-        Session.item_id.is_(None),
-        and_(
-            CurriculumItem.deleted.is_(False),
-            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
-            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
-        ),
-    )
-
-
-def _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, mastery_scoped=False):
+def _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only):
     """Total minutes and count of distinct days with sessions in [start, end]."""
     filters = [
         Session.curriculum_id == curriculum_id,
@@ -64,26 +51,15 @@ def _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, ma
         filters.append(Session.item_id.isnot(None))
 
     q = db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0)).filter(and_(*filters))
-    if mastery_scoped and curriculum_scopes_mastery_to_time_items(curriculum_id):
-        q = q.outerjoin(CurriculumItem, Session.item_id == CurriculumItem.id).filter(_mastery_session_filter())
 
     total = q.scalar()
     total = total or 0
 
     days_q = db.session.query(func.count(func.distinct(Session.logged_at))).filter(and_(*filters))
-    if mastery_scoped and curriculum_scopes_mastery_to_time_items(curriculum_id):
-        days_q = days_q.outerjoin(CurriculumItem, Session.item_id == CurriculumItem.id).filter(_mastery_session_filter())
 
     active_days = days_q.scalar()
     active_days = active_days or 0
     return total, active_days
-
-
-def _sum_mastery_minutes_and_days(curriculum_id, start, end, item_tagged_only):
-    """Like _sum_and_active_days_minutes but always applies mastery session filter when applicable."""
-    if not curriculum_scopes_mastery_to_time_items(curriculum_id):
-        return _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, mastery_scoped=False)
-    return _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, mastery_scoped=True)
 
 
 def get_heatmap_data(user_id=None, project_id=None, curriculum_id=None, today=None):
@@ -260,21 +236,17 @@ def get_velocity(curriculum, days=30):
     end = local_today_for_user(curriculum.user)
     start = end - timedelta(days=days)
 
-    if curriculum_scopes_mastery_to_time_items(curriculum.id):
-        total_minutes, active_days = _sum_mastery_minutes_and_days(curriculum.id, start, end, item_tagged_only=True)
-        if total_minutes == 0:
-            total_minutes, active_days = _sum_mastery_minutes_and_days(curriculum.id, start, end, item_tagged_only=False)
-    elif _curriculum_has_active_items(curriculum.id):
+    if _curriculum_has_active_items(curriculum.id):
         total_minutes, active_days = _sum_and_active_days_minutes(
-            curriculum.id, start, end, item_tagged_only=True, mastery_scoped=False
+            curriculum.id, start, end, item_tagged_only=True
         )
         if total_minutes == 0:
             total_minutes, active_days = _sum_and_active_days_minutes(
-                curriculum.id, start, end, item_tagged_only=False, mastery_scoped=False
+                curriculum.id, start, end, item_tagged_only=False
             )
     else:
         total_minutes, active_days = _sum_and_active_days_minutes(
-            curriculum.id, start, end, item_tagged_only=False, mastery_scoped=False
+            curriculum.id, start, end, item_tagged_only=False
         )
 
     if active_days == 0:

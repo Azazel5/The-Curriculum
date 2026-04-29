@@ -12,14 +12,12 @@ sessions_bp = Blueprint('sessions', __name__)
 
 
 def _curriculum_has_time_loggable_items(cid):
-    """Only daily time-target rows use the session ledger; one-shots and presence dailies do not."""
+    """Any active roadmap row can receive direct time logs."""
     return (
         db.session.query(CurriculumItem.id)
         .filter(
             CurriculumItem.curriculum_id == cid,
             CurriculumItem.deleted.is_(False),
-            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
-            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
         )
         .first()
         is not None
@@ -28,14 +26,12 @@ def _curriculum_has_time_loggable_items(cid):
 
 def _item_choices_for_curriculum(cid):
     if not _curriculum_has_time_loggable_items(cid):
-        return [(0, '— log to curriculum only (no time-tracked roadmap rows) —')]
+        return [(0, '— no items: log to curriculum only —')]
     items = (
         CurriculumItem.query
         .filter(
             CurriculumItem.curriculum_id == cid,
             CurriculumItem.deleted.is_(False),
-            CurriculumItem.item_kind == CurriculumItem.KIND_DAILY,
-            CurriculumItem.completion_style == CurriculumItem.STYLE_TIME_THRESHOLD,
         )
         .order_by(CurriculumItem.sort_order, CurriculumItem.id)
         .all()
@@ -182,7 +178,7 @@ def log_session():
         item_id = None
         if needs_item:
             if not form.item_id.data:
-                flash('Select a time-tracked roadmap item (daily with a time target).', 'error')
+                flash('Select an item to credit the time precisely (recurring or one-time).', 'error')
                 return render_template('sessions/log.html', form=form, curricula=curricula)
             item = CurriculumItem.query.filter_by(
                 id=form.item_id.data, curriculum_id=c.id, deleted=False

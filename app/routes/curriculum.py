@@ -1,8 +1,8 @@
-from datetime import date, datetime
+from datetime import date
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app import db
-from app.models import Curriculum, CurriculumItem, Session, Project, ItemActivityDay
+from app.models import Curriculum, CurriculumItem, Session, Project
 from app.forms import CurriculumForm, CurriculumItemForm, ProjectForm
 from app.utils.dates import local_today_for_user
 from app.utils.stats import get_velocity, get_projected_completion
@@ -10,23 +10,25 @@ from app.utils.stats import get_velocity, get_projected_completion
 curriculum_bp = Blueprint('curriculum', __name__)
 
 
-def _parse_item_completion_fields(request_form, item_kind):
-    """Returns (completion_style, daily_target_minutes or None). Only meaningful for daily items."""
-    style = request_form.get('completion_style', CurriculumItem.STYLE_PRESENCE)
-    if style not in (CurriculumItem.STYLE_PRESENCE, CurriculumItem.STYLE_TIME_THRESHOLD):
-        style = CurriculumItem.STYLE_PRESENCE
-    raw = request_form.get('daily_target_minutes', '').strip()
-    minutes = None
-    if raw:
+def _parse_item_target_fields(request_form, item_kind):
+    """Returns (daily_target_minutes, one_time_target_minutes) with legacy-safe normalization."""
+    raw_daily = request_form.get('daily_target_minutes', '').strip()
+    raw_one_time = request_form.get('one_time_target_minutes', '').strip()
+    daily_target = None
+    one_time_target = None
+    if raw_daily:
         try:
-            minutes = max(1, int(raw))
+            daily_target = max(1, int(raw_daily))
         except ValueError:
-            minutes = None
-    if item_kind != CurriculumItem.KIND_DAILY:
-        return CurriculumItem.STYLE_PRESENCE, None
-    if style == CurriculumItem.STYLE_TIME_THRESHOLD:
-        return CurriculumItem.STYLE_TIME_THRESHOLD, minutes
-    return CurriculumItem.STYLE_PRESENCE, None
+            daily_target = None
+    if raw_one_time:
+        try:
+            one_time_target = max(1, int(raw_one_time))
+        except ValueError:
+            one_time_target = None
+    if item_kind == CurriculumItem.KIND_DAILY:
+        return daily_target, None
+    return None, one_time_target
 
 
 @curriculum_bp.route('/curriculums')
@@ -210,11 +212,13 @@ def add_item(id):
     if kind not in (CurriculumItem.KIND_ONE_SHOT, CurriculumItem.KIND_DAILY):
         kind = CurriculumItem.KIND_ONE_SHOT
 
-    comp_style, tgt_min = _parse_item_completion_fields(request.form, kind)
-    if kind == CurriculumItem.KIND_DAILY and comp_style == CurriculumItem.STYLE_TIME_THRESHOLD:
-        if tgt_min is None:
-            flash('Time-based daily items need a daily target (minutes).', 'error')
-            return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
+    daily_target, one_time_target = _parse_item_target_fields(request.form, kind)
+    if kind == CurriculumItem.KIND_DAILY and daily_target is None:
+        flash('Recurring tasks need a daily target (minutes).', 'error')
+        return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
+    if kind == CurriculumItem.KIND_ONE_SHOT and one_time_target is None:
+        flash('One-time tasks need a total minutes target.', 'error')
+        return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
 
     max_order = db.session.query(db.func.max(CurriculumItem.sort_order))\
         .filter_by(curriculum_id=id).scalar() or 0
@@ -225,8 +229,9 @@ def add_item(id):
         description=request.form.get('description', '').strip() or None,
         deadline=deadline,
         item_kind=kind,
-        completion_style=comp_style,
-        daily_target_minutes=tgt_min,
+        completion_style=CurriculumItem.STYLE_TIME_THRESHOLD if kind == CurriculumItem.KIND_DAILY else CurriculumItem.STYLE_PRESENCE,
+        daily_target_minutes=daily_target,
+        one_time_target_minutes=one_time_target,
         sort_order=max_order + 1
     )
     db.session.add(item)
@@ -251,22 +256,10 @@ def toggle_item(cid, item_id):
         )
         .first_or_404()
     )
-    today = local_today_for_user(current_user)
-    if item.item_kind == CurriculumItem.KIND_DAILY and item.is_time_threshold_daily():
-        flash('This item completes automatically when today’s logged time on it meets or exceeds the target.', 'info')
-        return redirect(url_for('curriculum.curriculum_detail', id=cid) + '#items')
     if item.item_kind == CurriculumItem.KIND_DAILY:
-        if item.daily_completed_on == today:
-            item.daily_completed_on = None
-            ItemActivityDay.query.filter_by(item_id=item.id, activity_date=today).delete()
-        else:
-            item.daily_completed_on = today
-            if not ItemActivityDay.query.filter_by(item_id=item.id, activity_date=today).first():
-                db.session.add(ItemActivityDay(item_id=item.id, activity_date=today))
+        flash('Recurring tasks complete automatically when today’s logged minutes reach the daily target.', 'info')
     else:
-        item.completed = not item.completed
-        item.completed_at = datetime.utcnow() if item.completed else None
-    db.session.commit()
+        flash('One-time tasks complete automatically when total logged minutes reach the target.', 'info')
     return redirect(url_for('curriculum.curriculum_detail', id=cid) + '#items')
 
 
@@ -297,20 +290,21 @@ def edit_item(id, iid):
     if kind in (CurriculumItem.KIND_ONE_SHOT, CurriculumItem.KIND_DAILY):
         item.item_kind = kind
 
-    comp_style, tgt_min = _parse_item_completion_fields(request.form, item.item_kind)
+    daily_target, one_time_target = _parse_item_target_fields(request.form, item.item_kind)
     if item.item_kind == CurriculumItem.KIND_DAILY:
-        item.completion_style = comp_style
-        if comp_style == CurriculumItem.STYLE_TIME_THRESHOLD:
-            if tgt_min is not None:
-                item.daily_target_minutes = tgt_min
-            elif item.daily_target_minutes is None:
-                flash('Set daily target minutes for time-based daily items.', 'error')
-                return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
-        else:
-            item.daily_target_minutes = None
+        if daily_target is None:
+            flash('Recurring tasks need a daily target (minutes).', 'error')
+            return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
+        item.completion_style = CurriculumItem.STYLE_TIME_THRESHOLD
+        item.daily_target_minutes = daily_target
+        item.one_time_target_minutes = None
     else:
+        if one_time_target is None:
+            flash('One-time tasks need a total minutes target.', 'error')
+            return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
         item.completion_style = CurriculumItem.STYLE_PRESENCE
         item.daily_target_minutes = None
+        item.one_time_target_minutes = one_time_target
 
     if prev_kind != item.item_kind:
         item.completed = False

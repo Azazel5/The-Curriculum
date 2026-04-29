@@ -161,7 +161,7 @@
 <div id="items" class="mb-6">
   <div class="flex items-center justify-between mb-3">
     <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest">Items / Roadmap</h2>
-    <span class="text-xs text-gray-700">{{ curriculum.completed_items_count }} of {{ curriculum.total_items_count }} done <span class="text-gray-600">(one-time ✓, daily presence ✓, or daily time target via logged minutes)</span></span>
+    <span class="text-xs text-gray-700">{{ curriculum.completed_items_count }} of {{ curriculum.total_items_count }} done <span class="text-gray-600">(recurring auto-done by daily target, one-time auto-done by total target)</span></span>
   </div>
 
   <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
@@ -170,8 +170,8 @@
     {% if items %}
     <div id="items-list">
       {% for item in items %}
-      {% set goal_met = (item.item_kind == 'daily' and item.is_daily_done_today) or (item.item_kind == 'one_shot' and item.is_one_shot_done) %}
-      {% set time_auto = item.item_kind == 'daily' and item.completion_style == 'time_threshold' %}
+      {% set goal_met = item.is_complete_for_stats(today) %}
+      {% set is_daily = item.item_kind == 'daily' %}
       <div class="item-row group border-b border-gray-800/60 last:border-0 transition-shadow
                   {% if highlight_item_id == item.id %}ring-2 ring-inset ring-green-500/60{% endif %}
                   {% if item.item_kind == 'one_shot' and item.is_one_shot_done %}opacity-70{% endif %}"
@@ -179,29 +179,11 @@
 
         <div class="flex items-start gap-4 px-5 py-5">
 
-          {% if time_auto %}
           <div class="pt-1 flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs leading-none
                       {% if goal_met %}border-green-500 bg-green-500/20 text-green-400{% else %}border-gray-600 text-transparent{% endif %}"
-               title="Auto: log at least {{ item.daily_target_minutes }} min today on this item (manual time entry or timer).">
+               title="{% if is_daily %}Auto: log at least {{ item.daily_target_minutes }} min today on this recurring task.{% else %}Auto: log at least {{ item.one_time_target_minutes }} min total on this one-time task.{% endif %}">
             {% if goal_met %}✓{% endif %}
           </div>
-          {% else %}
-          <form method="post"
-                action="{{ url_for('curriculum.toggle_item', cid=curriculum.id, item_id=item.id) }}"
-                class="pt-1 flex-shrink-0">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit"
-                    class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all text-xs leading-none
-                      {% if goal_met %}
-                        border-green-500 bg-green-500/20 text-green-400
-                      {% else %}
-                        border-gray-600 hover:border-green-500 text-transparent hover:text-green-500/50
-                      {% endif %}"
-                    title="{% if item.item_kind == 'daily' %}Mark done for today (presence only; resets tomorrow){% else %}Mark done when you’re satisfied{% endif %}">
-              {% if goal_met %}✓{% endif %}
-            </button>
-          </form>
-          {% endif %}
 
           <div class="flex-1 min-w-0 space-y-3">
             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -209,22 +191,18 @@
                 {% if item.item_kind == 'one_shot' and item.is_one_shot_done %}line-through text-gray-500{% else %}text-white{% endif %}">
                 {{ item.title }}
               </h3>
-              {% if time_auto %}
               <a href="{{ url_for('sessions.log_session') }}?item={{ item.id }}"
                  class="flex-shrink-0 inline-flex items-center justify-center text-xs font-semibold text-green-500 hover:text-green-400 border border-green-700/50 hover:border-green-500 rounded-lg px-3 py-1.5 transition-colors">
                 + Log time
               </a>
-              {% endif %}
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-              {% if item.item_kind == 'daily' %}
+              {% if is_daily %}
               <span class="text-xs px-2.5 py-1 rounded-full bg-blue-950 border border-blue-900 text-blue-400 font-medium">Daily</span>
-              {% if time_auto %}
-              <span class="text-xs px-2.5 py-1 rounded-full bg-violet-950 border border-violet-800 text-violet-300 font-medium">Time target · {{ item.daily_target_minutes }}m/day</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-violet-950 border border-violet-800 text-violet-300 font-medium">Target · {{ item.daily_target_minutes }}m/day</span>
               {% else %}
-              <span class="text-xs px-2.5 py-1 rounded-full bg-gray-800 border border-gray-700 text-gray-400 font-medium">Presence</span>
-              {% endif %}
+              <span class="text-xs px-2.5 py-1 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-300 font-medium">One-time target · {{ item.one_time_target_minutes }}m total</span>
               {% endif %}
               {% if item.deadline and item.deadline_status != 'done' %}
                 {% set delta = (item.deadline - today).days %}
@@ -245,7 +223,7 @@
                     Due {{ item.deadline.strftime('%b %d') }}
                   </span>
                 {% endif %}
-              {% elif item.item_kind == 'daily' and item.is_daily_done_today %}
+              {% elif is_daily and item.is_daily_done_today %}
                 <span class="text-xs px-2.5 py-1 rounded-full bg-green-950 border border-green-900 text-green-600 font-medium">
                   Done today
                 </span>
@@ -256,20 +234,21 @@
               {% endif %}
             </div>
 
-            {% if time_auto %}
             <div class="inline-flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-gray-700/80 bg-gray-800/40 px-4 py-2.5">
               <span class="text-xs text-gray-500 uppercase tracking-wide">Time on this item</span>
               <span class="text-sm font-mono tabular-nums text-gray-200">{{ '%.1f'|format(item.hours_logged) }}h <span class="text-gray-500 font-sans text-xs font-normal">total</span></span>
-              <span class="hidden sm:inline text-gray-600">·</span>
-              <span class="text-sm font-mono tabular-nums text-green-400/90">{{ '%.1f'|format(item.hours_logged_today) }}h <span class="text-gray-500 font-sans text-xs font-normal">today</span></span>
-              {% if item.daily_target_minutes %}
+              {% if is_daily and item.daily_target_minutes %}
               <span class="hidden sm:inline text-gray-600">·</span>
               <span class="text-sm font-mono tabular-nums {% if item.minutes_logged_on(today) >= item.daily_target_minutes %}text-green-400{% else %}text-orange-400/90{% endif %}">
                 {{ item.minutes_logged_on(today) }} / {{ item.daily_target_minutes }} min <span class="text-gray-500 font-sans text-xs font-normal">toward today’s bar</span>
               </span>
+              {% elif not is_daily and item.one_time_target_minutes %}
+              <span class="hidden sm:inline text-gray-600">·</span>
+              <span class="text-sm font-mono tabular-nums {% if item.total_minutes_logged >= item.one_time_target_minutes %}text-green-400{% else %}text-orange-400/90{% endif %}">
+                {{ item.total_minutes_logged }} / {{ item.one_time_target_minutes }} min <span class="text-gray-500 font-sans text-xs font-normal">toward total target</span>
+              </span>
               {% endif %}
             </div>
-            {% endif %}
 
             {% if item.description %}
             <p class="text-xs text-gray-500 leading-relaxed max-w-3xl">{{ item.description }}</p>
@@ -285,22 +264,21 @@
                           class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 resize-none">{{ item.description or '' }}</textarea>
                 <div class="flex flex-wrap gap-2 items-center">
                   <select name="item_kind"
+                          data-item-kind="{{ item.id }}"
                           class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500">
                     <option value="one_shot" {% if item.item_kind == 'one_shot' %}selected{% endif %}>One-time</option>
-                    <option value="daily" {% if item.item_kind == 'daily' %}selected{% endif %}>Daily</option>
+                    <option value="daily" {% if item.item_kind == 'daily' %}selected{% endif %}>Recurring (daily)</option>
                   </select>
-                  {% if item.item_kind == 'daily' %}
-                  <select name="completion_style"
-                          class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500"
-                          title="How daily completion works">
-                    <option value="presence" {% if item.completion_style == 'presence' %}selected{% endif %}>Presence (manual check)</option>
-                    <option value="time_threshold" {% if item.completion_style == 'time_threshold' %}selected{% endif %}>Time target (auto when logged ≥ target)</option>
-                  </select>
-                  <input type="number" name="daily_target_minutes" min="1" placeholder="Min / day"
+                  <input type="number" name="daily_target_minutes" min="1" placeholder="Min/day"
+                         data-daily-target="{{ item.id }}"
                          value="{{ item.daily_target_minutes or '' }}"
-                         class="w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-green-500"
-                         title="Required for time target: minutes to log on this item today">
-                  {% endif %}
+                         class="{% if item.item_kind != 'daily' %}hidden {% endif %}w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-green-500"
+                         title="Minutes required each day for recurring auto-complete">
+                  <input type="number" name="one_time_target_minutes" min="1" placeholder="Total min"
+                         data-one-time-target="{{ item.id }}"
+                         value="{{ item.one_time_target_minutes or '' }}"
+                         class="{% if item.item_kind == 'daily' %}hidden {% endif %}w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-green-500"
+                         title="Total minutes required for one-time auto-complete">
                   <input type="date" name="deadline"
                          value="{{ item.deadline.isoformat() if item.deadline else '' }}"
                          class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500"
@@ -348,18 +326,14 @@
           <select name="item_kind" id="new-item-kind"
                   class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:outline-none focus:border-green-500 transition-colors">
             <option value="one_shot">One-time</option>
-            <option value="daily">Daily (resets each morning)</option>
+            <option value="daily">Recurring (daily)</option>
           </select>
-          <span id="new-daily-completion" class="hidden flex flex-wrap gap-2 items-center">
-            <select name="completion_style" id="new-completion-style"
-                    class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:outline-none focus:border-green-500 max-w-[14rem]">
-              <option value="presence">Daily: presence (manual ✓)</option>
-              <option value="time_threshold">Daily: time target (auto ✓)</option>
-            </select>
-            <input type="number" name="daily_target_minutes" id="new-daily-target" min="1" placeholder="Min/day"
-                   class="w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm font-mono focus:outline-none focus:border-green-500"
-                   title="For time target: minutes required today on this item">
-          </span>
+          <input type="number" name="daily_target_minutes" id="new-daily-target" min="1" placeholder="Min/day"
+                 class="w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm font-mono focus:outline-none focus:border-green-500"
+                 title="Recurring task: minutes required each day">
+          <input type="number" name="one_time_target_minutes" id="new-one-time-target" min="1" placeholder="Total min"
+                 class="hidden w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm font-mono focus:outline-none focus:border-green-500"
+                 title="One-time task: total minutes required">
           <input type="date" name="deadline"
                  class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-400 text-sm focus:outline-none focus:border-green-500 transition-colors"
                  title="Optional deadline">
@@ -425,14 +399,29 @@
 
   (function () {
     const kind = document.getElementById('new-item-kind');
-    const wrap = document.getElementById('new-daily-completion');
+    const dailyInput = document.getElementById('new-daily-target');
+    const oneTimeInput = document.getElementById('new-one-time-target');
     function sync() {
       const daily = kind && kind.value === 'daily';
-      if (wrap) wrap.classList.toggle('hidden', !daily);
+      if (dailyInput) dailyInput.classList.toggle('hidden', !daily);
+      if (oneTimeInput) oneTimeInput.classList.toggle('hidden', daily);
     }
     kind?.addEventListener('change', sync);
     sync();
   })();
+
+  document.querySelectorAll('[data-item-kind]').forEach((select) => {
+    function syncEditTargets() {
+      const itemId = select.dataset.itemKind;
+      const dailyInput = document.querySelector(`[data-daily-target="${itemId}"]`);
+      const oneTimeInput = document.querySelector(`[data-one-time-target="${itemId}"]`);
+      const isDaily = select.value === 'daily';
+      if (dailyInput) dailyInput.classList.toggle('hidden', !isDaily);
+      if (oneTimeInput) oneTimeInput.classList.toggle('hidden', isDaily);
+    }
+    select.addEventListener('change', syncEditTargets);
+    syncEditTargets();
+  });
 
   fetch('/api/heatmap/{{ curriculum.id }}')
     .then(r => r.json())
