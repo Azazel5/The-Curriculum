@@ -207,6 +207,9 @@ def add_item(id):
             deadline = date.fromisoformat(deadline_str)
         except ValueError:
             pass
+    if not deadline:
+        flash('Every task needs a deadline.', 'error')
+        return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
 
     kind = request.form.get('item_kind', CurriculumItem.KIND_ONE_SHOT)
     if kind not in (CurriculumItem.KIND_ONE_SHOT, CurriculumItem.KIND_DAILY):
@@ -283,7 +286,14 @@ def edit_item(id, iid):
     item.description = request.form.get('description', '').strip() or None
 
     deadline_str = request.form.get('deadline', '').strip()
-    item.deadline = date.fromisoformat(deadline_str) if deadline_str else None
+    if not deadline_str:
+        flash('Every task needs a deadline.', 'error')
+        return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
+    try:
+        item.deadline = date.fromisoformat(deadline_str)
+    except ValueError:
+        flash('Deadline must be a valid date.', 'error')
+        return redirect(url_for('curriculum.curriculum_detail', id=id) + '#items')
 
     prev_kind = item.item_kind
     kind = request.form.get('item_kind', item.item_kind)

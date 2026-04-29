@@ -281,8 +281,9 @@
                          title="Total minutes required for one-time auto-complete">
                   <input type="date" name="deadline"
                          value="{{ item.deadline.isoformat() if item.deadline else '' }}"
+                         required
                          class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500"
-                         title="Optional reminder date">
+                         title="Required deadline">
                   <button type="submit" class="bg-green-600 hover:bg-green-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">Save</button>
                   <button type="button" onclick="toggleEdit({{ item.id }})"
                           class="text-gray-500 hover:text-gray-300 text-xs px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
@@ -335,8 +336,9 @@
                  class="hidden w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm font-mono focus:outline-none focus:border-green-500"
                  title="One-time task: total minutes required">
           <input type="date" name="deadline"
+                 required
                  class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-400 text-sm focus:outline-none focus:border-green-500 transition-colors"
-                 title="Optional deadline">
+                 title="Required deadline">
           <button type="submit"
                   class="bg-green-700 hover:bg-green-600 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
             + Add

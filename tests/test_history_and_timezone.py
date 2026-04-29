@@ -183,6 +183,47 @@ class HistoryAndTimezoneTests(unittest.TestCase):
         self.assertIn('Recurring Practice', body)
         self.assertIn('One-time Milestone', body)
 
+    def test_add_item_requires_deadline(self):
+        response = self.client.post(
+            f'/curriculums/{self.curriculum.id}/items',
+            data={
+                'title': 'No Deadline Task',
+                'item_kind': 'daily',
+                'daily_target_minutes': '30',
+            },
+            follow_redirects=True,
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Every task needs a deadline.', body)
+        self.assertEqual(CurriculumItem.query.count(), 0)
+
+    def test_dashboard_today_focus_renders_recurring_and_one_time(self):
+        recurring = CurriculumItem(
+            curriculum_id=self.curriculum.id,
+            title='Daily Scales',
+            item_kind=CurriculumItem.KIND_DAILY,
+            completion_style=CurriculumItem.STYLE_TIME_THRESHOLD,
+            daily_target_minutes=45,
+            deadline=date(2026, 5, 1),
+        )
+        one_time = CurriculumItem(
+            curriculum_id=self.curriculum.id,
+            title='Register Company',
+            item_kind=CurriculumItem.KIND_ONE_SHOT,
+            completion_style=CurriculumItem.STYLE_PRESENCE,
+            one_time_target_minutes=180,
+            deadline=date(2026, 4, 30),
+        )
+        db.session.add_all([recurring, one_time])
+        db.session.commit()
+        response = self.client.get('/')
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Today Focus', body)
+        self.assertIn('Daily Scales', body)
+        self.assertIn('Register Company', body)
+
 
 if __name__ == '__main__':
     unittest.main()
