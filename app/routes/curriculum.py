@@ -115,7 +115,7 @@ def curriculum_detail(id):
         return redirect(url_for('curriculum.curriculum_detail', id=id))
 
     today = local_today_for_user(current_user)
-    items = c.items.filter_by(deleted=False).order_by(CurriculumItem.sort_order, CurriculumItem.id).all()
+    items = c.active_items
 
     # Recent sessions (last 10)
     recent_sessions = (

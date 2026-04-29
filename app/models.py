@@ -85,7 +85,16 @@ class Curriculum(db.Model):
 
     @property
     def active_items(self):
-        return self.items.filter_by(deleted=False).order_by('sort_order', 'id').all()
+        items = self.items.filter_by(deleted=False).all()
+        far_future = date.max
+        return sorted(
+            items,
+            key=lambda item: (
+                item.deadline or far_future,
+                item.sort_order if item.sort_order is not None else 10**9,
+                item.id,
+            ),
+        )
 
     @property
     def total_minutes(self):

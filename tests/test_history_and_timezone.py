@@ -168,6 +168,7 @@ class HistoryAndTimezoneTests(unittest.TestCase):
             item_kind=CurriculumItem.KIND_DAILY,
             completion_style=CurriculumItem.STYLE_TIME_THRESHOLD,
             daily_target_minutes=30,
+            deadline=date(2026, 5, 5),
         ))
         db.session.add(CurriculumItem(
             curriculum_id=self.curriculum.id,
@@ -175,13 +176,16 @@ class HistoryAndTimezoneTests(unittest.TestCase):
             item_kind=CurriculumItem.KIND_ONE_SHOT,
             completion_style=CurriculumItem.STYLE_PRESENCE,
             one_time_target_minutes=120,
+            deadline=date(2026, 4, 30),
         ))
         db.session.commit()
         response = self.client.get(f'/api/items?curriculum_id={self.curriculum.id}')
-        body = response.get_data(as_text=True)
+        payload = response.get_json()
         self.assertEqual(response.status_code, 200)
-        self.assertIn('Recurring Practice', body)
-        self.assertIn('One-time Milestone', body)
+        titles = [row['title'] for row in payload]
+        self.assertIn('Recurring Practice', titles)
+        self.assertIn('One-time Milestone', titles)
+        self.assertLess(titles.index('One-time Milestone'), titles.index('Recurring Practice'))
 
     def test_add_item_requires_deadline(self):
         response = self.client.post(

@@ -33,8 +33,16 @@ def _item_choices_for_curriculum(cid):
             CurriculumItem.curriculum_id == cid,
             CurriculumItem.deleted.is_(False),
         )
-        .order_by(CurriculumItem.sort_order, CurriculumItem.id)
         .all()
+    )
+    far_future = date.max
+    items = sorted(
+        items,
+        key=lambda item: (
+            item.deadline or far_future,
+            item.sort_order if item.sort_order is not None else 10**9,
+            item.id,
+        ),
     )
     return [(i.id, i.title) for i in items]
 
