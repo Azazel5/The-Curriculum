@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 from app import db
 from app.models import Session, Curriculum, CurriculumItem
+from app.utils.dates import local_today_for_user
 from app.utils.stats import get_heatmap_data, get_velocity, get_projected_completion
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -13,13 +14,22 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 def heatmap():
     project_id = request.args.get('project_id', type=int)
     curriculum_id = request.args.get('curriculum_id', type=int)
-    return jsonify(get_heatmap_data(user_id=current_user.id, project_id=project_id, curriculum_id=curriculum_id))
+    return jsonify(get_heatmap_data(
+        user_id=current_user.id,
+        project_id=project_id,
+        curriculum_id=curriculum_id,
+        today=local_today_for_user(current_user),
+    ))
 
 
 @api_bp.route('/heatmap/<int:curriculum_id>')
 @login_required
 def heatmap_curriculum(curriculum_id):
-    return jsonify(get_heatmap_data(user_id=current_user.id, curriculum_id=curriculum_id))
+    return jsonify(get_heatmap_data(
+        user_id=current_user.id,
+        curriculum_id=curriculum_id,
+        today=local_today_for_user(current_user),
+    ))
 
 
 def _curriculum_requires_time_item(cid):
@@ -94,9 +104,9 @@ def stop_timer():
         item_id = None
 
     try:
-        logged_at = date.fromisoformat(client_date) if client_date else date.today()
+        logged_at = date.fromisoformat(client_date) if client_date else local_today_for_user(current_user)
     except ValueError:
-        logged_at = date.today()
+        logged_at = local_today_for_user(current_user)
 
     s = Session(
         curriculum_id=curriculum_id,

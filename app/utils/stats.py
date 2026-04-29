@@ -8,6 +8,7 @@ from app.models import (
     ItemActivityDay,
     curriculum_scopes_mastery_to_time_items,
 )
+from app.utils.dates import local_today_for_user
 
 
 def _apply_scope(q, user_id=None, project_id=None, curriculum_id=None):
@@ -85,14 +86,14 @@ def _sum_mastery_minutes_and_days(curriculum_id, start, end, item_tagged_only):
     return _sum_and_active_days_minutes(curriculum_id, start, end, item_tagged_only, mastery_scoped=True)
 
 
-def get_heatmap_data(user_id=None, project_id=None, curriculum_id=None):
+def get_heatmap_data(user_id=None, project_id=None, curriculum_id=None, today=None):
     """
     Returns {date_str: minutes_int | {m: minutes, a: true}} for the last 365 days.
 
     ``a`` marks days with non-session activity (daily presence check-in or one-shot done)
     when there were zero logged minutes that day — used for coloring and tooltips.
     """
-    end = date.today()
+    end = today or date.today()
     start = end - timedelta(days=364)
 
     cells = {}
@@ -225,8 +226,8 @@ def _has_any_activity_on(d, user_id=None, project_id=None, curriculum_id=None):
     )
 
 
-def get_streak(user_id=None, project_id=None, curriculum_id=None):
-    today = date.today()
+def get_streak(user_id=None, project_id=None, curriculum_id=None, today=None):
+    today = today or date.today()
     has_today = _has_any_activity_on(today, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
     current = today if has_today else today - timedelta(days=1)
     streak = 0
@@ -240,8 +241,8 @@ def get_streak(user_id=None, project_id=None, curriculum_id=None):
     return streak
 
 
-def get_today_minutes(user_id=None, project_id=None, curriculum_id=None):
-    q = db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0)).filter(Session.logged_at == date.today())
+def get_today_minutes(user_id=None, project_id=None, curriculum_id=None, today=None):
+    q = db.session.query(func.coalesce(func.sum(Session.duration_minutes), 0)).filter(Session.logged_at == (today or date.today()))
     q = _apply_scope(q, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
     result = q.scalar()
     return result or 0
@@ -256,7 +257,7 @@ def get_velocity(curriculum, days=30):
     if none in the window, uses all sessions for that curriculum.
     Idle days do not pull this average toward zero.
     """
-    end = date.today()
+    end = local_today_for_user(curriculum.user)
     start = end - timedelta(days=days)
 
     if curriculum_scopes_mastery_to_time_items(curriculum.id):
@@ -287,9 +288,9 @@ def get_projected_completion(curriculum):
         return None
     remaining = max(curriculum.mastery_hours - curriculum.total_hours, 0)
     if remaining <= 0:
-        return date.today()
+        return local_today_for_user(curriculum.user)
     days_needed = int(remaining / velocity)
-    return date.today() + timedelta(days=max(days_needed, 0))
+    return local_today_for_user(curriculum.user) + timedelta(days=max(days_needed, 0))
 
 
 def get_curriculum_time_distribution(user_id=None, project_id=None):
@@ -312,8 +313,8 @@ def get_curriculum_time_distribution(user_id=None, project_id=None):
     return result
 
 
-def get_daily_breakdown(days=30, user_id=None, project_id=None, curriculum_id=None):
-    end = date.today()
+def get_daily_breakdown(days=30, user_id=None, project_id=None, curriculum_id=None, today=None):
+    end = today or date.today()
     start = end - timedelta(days=days - 1)
     q = db.session.query(Session.logged_at, func.sum(Session.duration_minutes).label('total')).filter(
         Session.logged_at >= start, Session.logged_at <= end
@@ -329,9 +330,9 @@ def get_daily_breakdown(days=30, user_id=None, project_id=None, curriculum_id=No
     return result
 
 
-def get_weekly_breakdown(weeks=12, user_id=None, project_id=None, curriculum_id=None):
+def get_weekly_breakdown(weeks=12, user_id=None, project_id=None, curriculum_id=None, today=None):
     result = []
-    end = date.today()
+    end = today or date.today()
     for i in range(weeks - 1, -1, -1):
         week_end = end - timedelta(weeks=i)
         week_start = week_end - timedelta(days=6)

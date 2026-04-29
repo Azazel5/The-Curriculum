@@ -1,6 +1,8 @@
 import logging
+from zoneinfo import ZoneInfo
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from app.utils.dates import local_today, normalize_timezone_name
 
 logger = logging.getLogger(__name__)
 _scheduler = BackgroundScheduler()
@@ -8,7 +10,7 @@ _scheduler = BackgroundScheduler()
 
 def check_and_send_reminders(app):
     with app.app_context():
-        from datetime import date, datetime
+        from datetime import datetime
         from app.models import Settings, Session, Curriculum
         from flask_mail import Message
         from app import mail
@@ -19,13 +21,15 @@ def check_and_send_reminders(app):
             base_url = base_url[:-1]
 
         now = datetime.utcnow()
-        today = date.today()
         rows = Settings.query.filter_by(reminder_active=True).all()
         for settings in rows:
             if not settings.email or not settings.reminder_time:
                 continue
-            if now.hour != settings.reminder_time.hour:
+            timezone_name = normalize_timezone_name(settings.timezone)
+            local_now = now.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo(timezone_name))
+            if local_now.hour != settings.reminder_time.hour:
                 continue
+            today = local_today(timezone_name, now=now)
 
             session_today = (
                 Session.query

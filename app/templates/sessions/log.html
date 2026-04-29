@@ -42,7 +42,13 @@
         </label>
         <select name="item_id" id="manual-item"
                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-400 focus:outline-none focus:border-green-500 transition-colors">
+          {% if form.curriculum_id.data %}
+            {% for value, label in form.item_id.choices %}
+            <option value="{{ value }}" {% if form.item_id.data == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          {% else %}
           <option value="">— choose curriculum first —</option>
+          {% endif %}
         </select>
       </div>
 
@@ -158,6 +164,12 @@
           return;
         }
         targetSelect.innerHTML = '';
+        if (targetSelect.id === 'manual-item') {
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = '— select item —';
+          targetSelect.appendChild(placeholder);
+        }
         data.forEach(i => {
           const opt = document.createElement('option');
           opt.value = i.id; opt.textContent = i.title;

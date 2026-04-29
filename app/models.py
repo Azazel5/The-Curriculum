@@ -1,6 +1,7 @@
 from datetime import datetime, date
 from sqlalchemy import func, and_, or_
 from app import db
+from app.utils.dates import local_today_for_user
 from flask_login import UserMixin
 
 
@@ -118,7 +119,7 @@ class Curriculum(db.Model):
 
     @property
     def completed_items_count(self):
-        today = date.today()
+        today = local_today_for_user(self.user)
         items = self.items.filter_by(deleted=False).all()
         return sum(1 for i in items if i.is_complete_for_stats(today))
 
@@ -175,7 +176,7 @@ class CurriculumItem(db.Model):
 
     @property
     def hours_logged_today(self):
-        return self.minutes_logged_on(date.today()) / 60.0
+        return self.minutes_logged_on(local_today_for_user(self.curriculum.user)) / 60.0
 
     def is_time_threshold_daily(self):
         return (
@@ -185,7 +186,7 @@ class CurriculumItem(db.Model):
 
     def is_complete_for_stats(self, today=None):
         """Whether this item counts toward curriculum roadmap “done” count for ``today``."""
-        today = today or date.today()
+        today = today or local_today_for_user(self.curriculum.user)
         if self.item_kind == self.KIND_DAILY:
             if self.completion_style == self.STYLE_TIME_THRESHOLD:
                 tgt = self.daily_target_minutes
@@ -205,12 +206,13 @@ class CurriculumItem(db.Model):
     def is_daily_done_today(self):
         if self.item_kind != self.KIND_DAILY:
             return False
+        today = local_today_for_user(self.curriculum.user)
         if self.completion_style == self.STYLE_TIME_THRESHOLD:
             tgt = self.daily_target_minutes
             if tgt is None or tgt < 1:
                 return False
-            return self.minutes_logged_on(date.today()) >= tgt
-        return self.daily_completed_on == date.today()
+            return self.minutes_logged_on(today) >= tgt
+        return self.daily_completed_on == today
 
     @property
     def is_pending_in_roadmap(self):
@@ -221,6 +223,7 @@ class CurriculumItem(db.Model):
     @property
     def deadline_status(self):
         """Returns 'overdue', 'soon', 'upcoming', 'done', or None."""
+        today = local_today_for_user(self.curriculum.user)
         if self.item_kind == self.KIND_DAILY:
             if self.is_daily_done_today:
                 return 'done'
@@ -228,7 +231,7 @@ class CurriculumItem(db.Model):
             return 'done'
         if not self.deadline:
             return None
-        delta = (self.deadline - date.today()).days
+        delta = (self.deadline - today).days
         if delta < 0:
             return 'overdue'
         if delta <= 3:

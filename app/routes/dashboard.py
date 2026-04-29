@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app import db
 from app.models import Curriculum, Session, Project
+from app.utils.dates import local_today_for_user
 from app.utils.stats import (
     get_streak, get_today_minutes, get_curriculum_time_distribution,
     get_daily_breakdown, get_weekly_breakdown, get_velocity, get_projected_completion
@@ -14,6 +15,7 @@ dashboard_bp = Blueprint('dashboard', __name__)
 @dashboard_bp.route('/')
 @login_required
 def index():
+    today = local_today_for_user(current_user)
     project_id = request.args.get('project', type=int)
     selected_project = (
         Project.query.filter_by(id=project_id, user_id=current_user.id).first()
@@ -26,12 +28,12 @@ def index():
     for p in projects:
         project_cards.append({
             'project': p,
-            'streak': get_streak(user_id=current_user.id, project_id=p.id),
-            'today_minutes': get_today_minutes(user_id=current_user.id, project_id=p.id),
+            'streak': get_streak(user_id=current_user.id, project_id=p.id, today=today),
+            'today_minutes': get_today_minutes(user_id=current_user.id, project_id=p.id, today=today),
         })
 
-    streak = get_streak(user_id=current_user.id, project_id=selected_project.id) if selected_project else None
-    today_minutes = get_today_minutes(user_id=current_user.id, project_id=selected_project.id) if selected_project else None
+    streak = get_streak(user_id=current_user.id, project_id=selected_project.id, today=today) if selected_project else None
+    today_minutes = get_today_minutes(user_id=current_user.id, project_id=selected_project.id, today=today) if selected_project else None
 
     curricula_q = Curriculum.query.filter_by(user_id=current_user.id, archived=False).order_by(Curriculum.created_at)
     if selected_project:
@@ -43,7 +45,6 @@ def index():
         project_id=selected_project.id if selected_project else None,
     )
 
-    today = date_type.today()
     today_sessions_q = Session.query.join(Curriculum, Session.curriculum_id == Curriculum.id).filter(
         Session.logged_at == today,
         Curriculum.user_id == current_user.id,
@@ -69,6 +70,7 @@ def index():
 @dashboard_bp.route('/insights')
 @login_required
 def insights():
+    today = local_today_for_user(current_user)
     project_id = request.args.get('project', type=int)
     curriculum_id = request.args.get('curriculum', type=int)
 
@@ -95,12 +97,14 @@ def insights():
         user_id=current_user.id,
         project_id=selected_project.id if selected_project else None,
         curriculum_id=selected_curriculum.id if selected_curriculum else None,
+        today=today,
     )
     weekly = get_weekly_breakdown(
         12,
         user_id=current_user.id,
         project_id=selected_project.id if selected_project else None,
         curriculum_id=selected_curriculum.id if selected_curriculum else None,
+        today=today,
     )
 
     curriculum_stats = []
@@ -125,5 +129,5 @@ def insights():
         daily=daily,
         weekly=weekly,
         curriculum_stats=curriculum_stats,
-        today=date_type.today(),
+        today=today,
     )

@@ -41,8 +41,8 @@
         <a href="/log" class="bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition-colors">+ Log Time</a>
 
         <div class="hidden md:flex items-center gap-1">
-          <a href="/" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Projects</a>
           <a href="/curriculums" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Curriculums</a>
+          <a href="/history" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">History</a>
           <a href="/insights" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Insights</a>
           <a href="/settings" class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">Settings</a>
           <form method="POST" action="{{ url_for('auth.logout') }}" class="ml-2">
@@ -56,8 +56,8 @@
             Menu
           </summary>
           <div class="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-1">
-            <a href="/" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Projects</a>
             <a href="/curriculums" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Curriculums</a>
+            <a href="/history" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">History</a>
             <a href="/insights" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Insights</a>
             <a href="/settings" class="block px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg">Settings</a>
             <div class="h-px bg-gray-800 my-1"></div>
@@ -117,6 +117,23 @@
     {% block content %}{% endblock %}
   </main>
 
+  <script>
+    document.addEventListener('click', (event) => {
+      const card = event.target.closest('[data-card-href]');
+      if (!card) return;
+      if (event.target.closest('a, button, form, input, select, textarea, label, summary')) return;
+      window.location = card.dataset.cardHref;
+    });
+
+    document.addEventListener('keydown', (event) => {
+      const card = event.target.closest('[data-card-href]');
+      if (!card) return;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (event.target.closest('a, button, form, input, select, textarea, label, summary') !== card) return;
+      event.preventDefault();
+      window.location = card.dataset.cardHref;
+    });
+  </script>
   <script src="{{ url_for('static', filename='js/heatmap.js') }}"></script>
   <script src="{{ url_for('static', filename='js/timer.js') }}"></script>
   {% block scripts %}{% endblock %}

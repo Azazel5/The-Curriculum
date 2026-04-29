@@ -22,6 +22,14 @@ function fmtTime(secs) {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
+function localDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // ── Nav indicator (every page) ──────────────────────────────────────────────
 function updateNavIndicator() {
   const state = timerGetState();
@@ -136,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
           item_id: state.item_id || null,
           duration_minutes,
           note: noteEl ? noteEl.value : '',
-          date: new Date().toISOString().split('T')[0]
+          date: localDateString()
         })
       });
       if (res.ok) {

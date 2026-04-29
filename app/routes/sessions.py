@@ -1,9 +1,12 @@
+import csv
+import io
 from datetime import date
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, Response
 from flask_login import login_required, current_user
 from app import db
 from app.models import Session, Curriculum, CurriculumItem
 from app.forms import SessionForm
+from app.utils.dates import local_today_for_user
 
 sessions_bp = Blueprint('sessions', __name__)
 
@@ -51,11 +54,97 @@ def _populate_form(form):
     return curricula
 
 
+def _history_rows_for_user(user_id):
+    sessions = (
+        Session.query
+        .join(Curriculum, Session.curriculum_id == Curriculum.id)
+        .filter(Curriculum.user_id == user_id)
+        .order_by(Session.logged_at.asc(), Session.created_at.asc(), Session.id.asc())
+        .all()
+    )
+
+    cumulative_minutes_by_curriculum = {}
+    rows = []
+    for session in sessions:
+        curriculum = session.curriculum
+        target_minutes = int((curriculum.mastery_hours or 0) * 60)
+        cumulative_minutes = cumulative_minutes_by_curriculum.get(curriculum.id, 0) + session.duration_minutes
+        cumulative_minutes_by_curriculum[curriculum.id] = cumulative_minutes
+
+        progress_after_pct = 0.0
+        if target_minutes > 0:
+            progress_after_pct = min((cumulative_minutes / target_minutes) * 100, 100.0)
+        remaining_minutes = max(target_minutes - cumulative_minutes, 0)
+
+        rows.append({
+            'date': session.logged_at,
+            'project_name': curriculum.project.name if curriculum.project else 'Unassigned',
+            'curriculum_name': curriculum.name,
+            'item_title': session.item.title if session.item else '',
+            'time_logged_minutes': session.duration_minutes,
+            'time_logged_display': f'{session.duration_minutes // 60}h {session.duration_minutes % 60}m' if session.duration_minutes >= 60 and session.duration_minutes % 60 else (f'{session.duration_minutes // 60}h' if session.duration_minutes >= 60 and session.duration_minutes % 60 == 0 else f'{session.duration_minutes}m'),
+            'progress_after_hours': round(cumulative_minutes / 60.0, 2),
+            'progress_after_pct': round(progress_after_pct, 1),
+            'remaining_hours': round(remaining_minutes / 60.0, 2),
+            'note': session.note or '',
+            'source': session.source or 'manual',
+        })
+    return list(reversed(rows))
+
+
+@sessions_bp.route('/history')
+@login_required
+def history():
+    rows = _history_rows_for_user(current_user.id)
+    if request.args.get('format') == 'csv':
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow([
+            'date',
+            'project',
+            'curriculum',
+            'item',
+            'time_logged_minutes',
+            'time_logged_display',
+            'progress_after_hours',
+            'progress_after_pct',
+            'remaining_hours',
+            'note',
+            'source',
+        ])
+        for row in rows:
+            writer.writerow([
+                row['date'].isoformat(),
+                row['project_name'],
+                row['curriculum_name'],
+                row['item_title'],
+                row['time_logged_minutes'],
+                row['time_logged_display'],
+                row['progress_after_hours'],
+                row['progress_after_pct'],
+                row['remaining_hours'],
+                row['note'],
+                row['source'],
+            ])
+        return Response(
+            buffer.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename=curriculum-history.csv'},
+        )
+
+    today = local_today_for_user(current_user)
+    return render_template('sessions/history.html', rows=rows, today=today)
+
+
 @sessions_bp.route('/log', methods=['GET', 'POST'])
 @login_required
 def log_session():
     form = SessionForm()
     curricula = _populate_form(form)
+    today = local_today_for_user(current_user)
+
+    if not form.is_submitted():
+        form.logged_at.data = today
 
     pre_item = request.args.get('item', type=int)
     preselect = request.args.get('curriculum', type=int)
@@ -115,7 +204,7 @@ def log_session():
                 curriculum_id=c.id,
                 item_id=item_id,
                 duration_minutes=total_minutes,
-                logged_at=form.logged_at.data or date.today(),
+                logged_at=form.logged_at.data or today,
                 note=form.note.data or None,
                 source='manual',
             )

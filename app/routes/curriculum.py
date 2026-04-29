@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import Curriculum, CurriculumItem, Session, Project, ItemActivityDay
 from app.forms import CurriculumForm, CurriculumItemForm, ProjectForm
+from app.utils.dates import local_today_for_user
 from app.utils.stats import get_velocity, get_projected_completion
 
 curriculum_bp = Blueprint('curriculum', __name__)
@@ -111,7 +112,7 @@ def curriculum_detail(id):
         flash('Saved', 'success')
         return redirect(url_for('curriculum.curriculum_detail', id=id))
 
-    today = date.today()
+    today = local_today_for_user(current_user)
     items = c.items.filter_by(deleted=False).order_by(CurriculumItem.sort_order, CurriculumItem.id).all()
 
     # Recent sessions (last 10)
@@ -250,7 +251,7 @@ def toggle_item(cid, item_id):
         )
         .first_or_404()
     )
-    today = date.today()
+    today = local_today_for_user(current_user)
     if item.item_kind == CurriculumItem.KIND_DAILY and item.is_time_threshold_daily():
         flash('This item completes automatically when today’s logged time on it meets or exceeds the target.', 'info')
         return redirect(url_for('curriculum.curriculum_detail', id=cid) + '#items')

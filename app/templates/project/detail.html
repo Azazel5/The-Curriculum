@@ -26,7 +26,11 @@
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
   {% for c in curricula %}
-  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-colors">
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-colors cursor-pointer"
+       data-card-href="/curriculums/{{ c.id }}"
+       role="link"
+       tabindex="0"
+       aria-label="Open curriculum {{ c.name }}">
     <div class="flex items-start justify-between mb-4">
       <div class="flex items-center gap-3">
         <div class="w-4 h-4 rounded-full" style="background:{{ c.color }}"></div>
