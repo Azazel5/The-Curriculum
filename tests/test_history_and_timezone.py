@@ -139,6 +139,46 @@ class HistoryAndTimezoneTests(unittest.TestCase):
         self.assertIn('Mechanistic Interpretability', body)
         self.assertIn('15.0', body)
 
+    def test_history_defaults_to_month_to_date(self):
+        db.session.add_all([
+            Session(
+                curriculum_id=self.curriculum.id,
+                duration_minutes=10,
+                logged_at=date(2026, 3, 31),
+                note='March',
+                source='manual',
+            ),
+            Session(
+                curriculum_id=self.curriculum.id,
+                duration_minutes=20,
+                logged_at=date(2026, 4, 2),
+                note='April',
+                source='manual',
+            ),
+        ])
+        db.session.commit()
+
+        with patch('app.routes.sessions.local_today_for_user', return_value=date(2026, 4, 15)):
+            response = self.client.get('/history')
+            body = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn('March', body)
+            self.assertIn('April', body)
+
+    def test_history_range_filter_applies_to_csv(self):
+        db.session.add_all([
+            Session(curriculum_id=self.curriculum.id, duration_minutes=10, logged_at=date(2026, 4, 1), note='A', source='manual'),
+            Session(curriculum_id=self.curriculum.id, duration_minutes=10, logged_at=date(2026, 4, 10), note='B', source='manual'),
+            Session(curriculum_id=self.curriculum.id, duration_minutes=10, logged_at=date(2026, 4, 20), note='C', source='manual'),
+        ])
+        db.session.commit()
+        response = self.client.get('/history?format=csv&start=2026-04-05&end=2026-04-15')
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(',A,', body)
+        self.assertIn(',B,', body)
+        self.assertNotIn(',C,', body)
+
     def test_completed_items_count_uses_local_today(self):
         item = CurriculumItem(
             curriculum_id=self.curriculum.id,

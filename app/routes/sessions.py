@@ -58,7 +58,7 @@ def _populate_form(form):
     return curricula
 
 
-def _history_rows_for_user(user_id):
+def _history_rows_for_user(user_id, start_date=None, end_date=None):
     sessions = (
         Session.query
         .join(Curriculum, Session.curriculum_id == Curriculum.id)
@@ -66,6 +66,15 @@ def _history_rows_for_user(user_id):
         .order_by(Session.logged_at.asc(), Session.created_at.asc(), Session.id.asc())
         .all()
     )
+    if start_date or end_date:
+        filtered = []
+        for s in sessions:
+            if start_date and s.logged_at < start_date:
+                continue
+            if end_date and s.logged_at > end_date:
+                continue
+            filtered.append(s)
+        sessions = filtered
 
     cumulative_minutes_by_curriculum = {}
     rows = []
@@ -99,7 +108,27 @@ def _history_rows_for_user(user_id):
 @sessions_bp.route('/history')
 @login_required
 def history():
-    rows = _history_rows_for_user(current_user.id)
+    today = local_today_for_user(current_user)
+    default_start = today.replace(day=1)
+
+    raw_start = (request.args.get('start') or '').strip()
+    raw_end = (request.args.get('end') or '').strip()
+
+    start_date = None
+    end_date = None
+    try:
+        start_date = date.fromisoformat(raw_start) if raw_start else default_start
+    except ValueError:
+        start_date = default_start
+    try:
+        end_date = date.fromisoformat(raw_end) if raw_end else today
+    except ValueError:
+        end_date = today
+
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    rows = _history_rows_for_user(current_user.id, start_date=start_date, end_date=end_date)
     if request.args.get('format') == 'csv':
         buffer = io.StringIO()
         writer = csv.writer(buffer)
@@ -136,8 +165,13 @@ def history():
             headers={'Content-Disposition': 'attachment; filename=curriculum-history.csv'},
         )
 
-    today = local_today_for_user(current_user)
-    return render_template('sessions/history.html', rows=rows, today=today)
+    return render_template(
+        'sessions/history.html',
+        rows=rows,
+        today=today,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @sessions_bp.route('/log', methods=['GET', 'POST'])
