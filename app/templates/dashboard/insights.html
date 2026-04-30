@@ -134,26 +134,55 @@
 
 {% block scripts %}
 <script>
+  function fmtHours(hours) {
+    if (!hours) return '0h';
+    const whole = Math.floor(hours);
+    const mins = Math.round((hours - whole) * 60);
+    if (!whole) return `${mins}m`;
+    if (!mins) return `${whole}h`;
+    return `${whole}h ${mins}m`;
+  }
+
   const CHART_OPTS = {
     responsive: true,
     plugins: { legend: { display: false } },
     scales: {
       x: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 8 } },
       y: { grid: { color: '#1f2937' }, ticks: { color: '#6b7280', font: { size: 10 },
-           callback: v => { const h = Math.floor(v/60); return h ? h+'h' : v+'m'; } } }
+           callback: v => `${v}h` } }
     }
   };
   const daily = {{ daily | tojson }};
   new Chart(document.getElementById('dailyChart').getContext('2d'), {
     type: 'bar',
-    data: { labels: daily.map(d => d.date), datasets: [{ data: daily.map(d => d.minutes), backgroundColor: '#16a34a', borderRadius: 3, borderSkipped: false }] },
-    options: CHART_OPTS
+    data: { labels: daily.map(d => d.date), datasets: [{ data: daily.map(d => +(d.minutes / 60).toFixed(2)), backgroundColor: '#16a34a', borderRadius: 3, borderSkipped: false }] },
+    options: {
+      ...CHART_OPTS,
+      plugins: {
+        ...CHART_OPTS.plugins,
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${fmtHours(ctx.raw)}`
+          }
+        }
+      }
+    }
   });
   const weekly = {{ weekly | tojson }};
   new Chart(document.getElementById('weeklyChart').getContext('2d'), {
     type: 'bar',
-    data: { labels: weekly.map(w => w.week), datasets: [{ data: weekly.map(w => w.minutes), backgroundColor: '#7c3aed', borderRadius: 3, borderSkipped: false }] },
-    options: CHART_OPTS
+    data: { labels: weekly.map(w => w.week), datasets: [{ data: weekly.map(w => +(w.minutes / 60).toFixed(2)), backgroundColor: '#7c3aed', borderRadius: 3, borderSkipped: false }] },
+    options: {
+      ...CHART_OPTS,
+      plugins: {
+        ...CHART_OPTS.plugins,
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${fmtHours(ctx.raw)}`
+          }
+        }
+      }
+    }
   });
 
   function updateInsightsUrl() {
