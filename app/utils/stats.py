@@ -313,5 +313,10 @@ def get_weekly_breakdown(weeks=12, user_id=None, project_id=None, curriculum_id=
         )
         q = _apply_scope(q, user_id=user_id, project_id=project_id, curriculum_id=curriculum_id)
         total = (q.scalar() or 0)
-        result.append({'week': week_start.strftime('%b %d'), 'minutes': total})
+        result.append({
+            'week': week_start.strftime('%b %d'),
+            'minutes': total,
+            'start_iso': week_start.isoformat(),
+            'end_iso': week_end.isoformat(),
+        })
     return result

@@ -178,7 +178,13 @@
         ...CHART_OPTS.plugins,
         tooltip: {
           callbacks: {
-            label: (ctx) => ` ${fmtHours(ctx.raw)}`
+            label: (ctx) => {
+              const idx = ctx.dataIndex;
+              const startIso = weekly?.[idx]?.start_iso;
+              const endIso = weekly?.[idx]?.end_iso;
+              const range = (startIso && endIso) ? `${startIso} – ${endIso}` : ctx.label;
+              return ` ${range}: ${fmtHours(ctx.raw)}`;
+            }
           }
         }
       }
