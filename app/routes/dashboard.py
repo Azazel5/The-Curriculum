@@ -94,6 +94,11 @@ def index():
                 recurring_overdue += 1
         else:
             done = bool(item.is_one_shot_done)
+            # Today Focus is strictly "today": keep completed one-time wins only while still within
+            # the active deadline window (deadline today or future). This prevents stale wins from
+            # accumulating forever on the dashboard.
+            if done and delta < 0:
+                continue
             remaining = max((item.one_time_target_minutes or 0) - item.total_minutes_logged, 0)
             one_time_focus.append({
                 'item': item,

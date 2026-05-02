@@ -329,6 +329,32 @@ class HistoryAndTimezoneTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertLess(body.index('AAA Still Open'), body.index('ZZZ Already Done'))
 
+    def test_dashboard_today_focus_hides_completed_one_time_past_deadline(self):
+        with patch('app.routes.dashboard.local_today_for_user', return_value=date(2026, 5, 2)):
+            done_past_deadline = CurriculumItem(
+                curriculum_id=self.curriculum.id,
+                title='Old Win',
+                item_kind=CurriculumItem.KIND_ONE_SHOT,
+                completion_style=CurriculumItem.STYLE_PRESENCE,
+                one_time_target_minutes=60,
+                deadline=date(2026, 5, 1),
+            )
+            db.session.add(done_past_deadline)
+            db.session.flush()
+            db.session.add(Session(
+                curriculum_id=self.curriculum.id,
+                item_id=done_past_deadline.id,
+                duration_minutes=70,
+                logged_at=date(2026, 5, 1),
+                source='manual',
+            ))
+            db.session.commit()
+
+            response = self.client.get('/')
+            body = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn('Old Win', body)
+
 
 if __name__ == '__main__':
     unittest.main()
