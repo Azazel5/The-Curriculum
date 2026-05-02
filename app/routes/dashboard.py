@@ -93,8 +93,7 @@ def index():
             if item.deadline and delta < 0:
                 recurring_overdue += 1
         else:
-            if item.is_one_shot_done:
-                continue
+            done = bool(item.is_one_shot_done)
             remaining = max((item.one_time_target_minutes or 0) - item.total_minutes_logged, 0)
             one_time_focus.append({
                 'item': item,
@@ -103,12 +102,22 @@ def index():
                 'total_minutes': item.total_minutes_logged,
                 'target_minutes': item.one_time_target_minutes or 0,
                 'remaining_minutes': remaining,
+                'focus_complete': done,
             })
-            if item.deadline and delta < 0:
+            if item.deadline and delta < 0 and not done:
                 one_time_overdue += 1
 
     recurring_focus.sort(key=lambda row: (row['deadline_delta'], -row['remaining_minutes']))
-    one_time_focus.sort(key=lambda row: (row['deadline_delta'], -row['remaining_minutes']))
+
+    def _one_time_focus_sort_key(row):
+        # Open tasks first (by urgency); completed one-time tasks at the bottom (newer id first).
+        if row['focus_complete']:
+            return (1, -row['item'].id)
+        return (0, row['deadline_delta'], -row['remaining_minutes'])
+
+    one_time_focus.sort(key=_one_time_focus_sort_key)
+    one_time_open_count = sum(1 for row in one_time_focus if not row['focus_complete'])
+    one_time_done_count = sum(1 for row in one_time_focus if row['focus_complete'])
 
     return render_template(
         'dashboard/index.html',
@@ -123,6 +132,8 @@ def index():
         today=today,
         recurring_focus=recurring_focus,
         one_time_focus=one_time_focus,
+        one_time_open_count=one_time_open_count,
+        one_time_done_count=one_time_done_count,
         one_time_overdue=one_time_overdue,
         recurring_overdue=recurring_overdue,
     )

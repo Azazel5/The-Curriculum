@@ -129,8 +129,9 @@ class HistoryAndTimezoneTests(unittest.TestCase):
         ])
         db.session.commit()
 
-        response = self.client.get('/history?format=csv')
-        body = response.get_data(as_text=True)
+        with patch('app.routes.sessions.local_today_for_user', return_value=date(2026, 4, 30)):
+            response = self.client.get('/history?format=csv')
+            body = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('curriculum-history.csv', response.headers.get('Content-Disposition', ''))
@@ -267,6 +268,66 @@ class HistoryAndTimezoneTests(unittest.TestCase):
         self.assertIn('Today Focus', body)
         self.assertIn('Daily Scales', body)
         self.assertIn('Register Company', body)
+
+    def test_dashboard_today_focus_shows_completed_one_time(self):
+        with patch('app.routes.dashboard.local_today_for_user', return_value=date(2026, 5, 2)):
+            done_item = CurriculumItem(
+                curriculum_id=self.curriculum.id,
+                title='Underestimated Sprint',
+                item_kind=CurriculumItem.KIND_ONE_SHOT,
+                completion_style=CurriculumItem.STYLE_PRESENCE,
+                one_time_target_minutes=60,
+                deadline=date(2026, 5, 10),
+            )
+            db.session.add(done_item)
+            db.session.flush()
+            db.session.add(Session(
+                curriculum_id=self.curriculum.id,
+                item_id=done_item.id,
+                duration_minutes=70,
+                logged_at=date(2026, 5, 2),
+                source='manual',
+            ))
+            db.session.commit()
+            response = self.client.get('/')
+            body = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('Underestimated Sprint', body)
+            self.assertIn('Target met', body)
+            self.assertIn('(+10 min over)', body)
+
+    def test_dashboard_today_focus_orders_open_before_completed_one_time(self):
+        with patch('app.routes.dashboard.local_today_for_user', return_value=date(2026, 5, 2)):
+            open_item = CurriculumItem(
+                curriculum_id=self.curriculum.id,
+                title='AAA Still Open',
+                item_kind=CurriculumItem.KIND_ONE_SHOT,
+                completion_style=CurriculumItem.STYLE_PRESENCE,
+                one_time_target_minutes=120,
+                deadline=date(2026, 5, 20),
+            )
+            done_item = CurriculumItem(
+                curriculum_id=self.curriculum.id,
+                title='ZZZ Already Done',
+                item_kind=CurriculumItem.KIND_ONE_SHOT,
+                completion_style=CurriculumItem.STYLE_PRESENCE,
+                one_time_target_minutes=30,
+                deadline=date(2026, 5, 8),
+            )
+            db.session.add_all([open_item, done_item])
+            db.session.flush()
+            db.session.add(Session(
+                curriculum_id=self.curriculum.id,
+                item_id=done_item.id,
+                duration_minutes=45,
+                logged_at=date(2026, 5, 2),
+                source='manual',
+            ))
+            db.session.commit()
+            response = self.client.get('/')
+            body = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertLess(body.index('AAA Still Open'), body.index('ZZZ Already Done'))
 
 
 if __name__ == '__main__':
