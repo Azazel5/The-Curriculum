@@ -18,7 +18,7 @@ class CurriculumForm(FlaskForm):
     )
     status = SelectField(
         'Status',
-        choices=[('active', 'Active'), ('paused', 'Paused'), ('completed', 'Completed'), ('archived', 'Archived')],
+        choices=[('active', 'Active'), ('paused', 'Paused'), ('completed', 'Completed')],
         default='active',
         validators=[DataRequired()]
     )

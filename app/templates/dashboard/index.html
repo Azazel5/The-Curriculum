@@ -182,7 +182,7 @@
           </div>
         </div>
         <div class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
-          <span><span class="text-gray-400 font-mono">{{ p.curricula.filter_by(archived=False).count() }}</span> curricula</span>
+          <span><span class="text-gray-400 font-mono">{{ p.curricula.count() }}</span> curriculums</span>
           <span><span class="text-gray-300 font-mono">{{ '%.1f'|format(p.total_hours) }}h</span> logged</span>
         </div>
       </div>

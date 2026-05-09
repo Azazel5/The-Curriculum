@@ -148,10 +148,10 @@ def curriculum_detail(id):
 @login_required
 def delete_curriculum(id):
     c = Curriculum.query.filter_by(id=id, user_id=current_user.id).first_or_404()
-    c.archived = True
-    c.status = 'archived'
+    name = c.name
+    db.session.delete(c)
     db.session.commit()
-    flash(f'Archived "{c.name}"', 'success')
+    flash(f'Deleted "{name}"', 'success')
     return redirect(url_for('curriculum.list_curriculums'))
 
 
@@ -168,6 +168,20 @@ def project_detail(id):
     project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     curricula = project.curricula.filter_by(archived=False).order_by(Curriculum.created_at).all()
     return render_template('project/detail.html', project=project, curricula=curricula)
+
+
+@curriculum_bp.route('/projects/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_project(id):
+    project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    if project.curricula.count() > 0:
+        flash('Remove all curriculums from this project before deleting it.', 'error')
+        return redirect(url_for('curriculum.project_detail', id=id))
+    name = project.name
+    db.session.delete(project)
+    db.session.commit()
+    flash(f'Deleted project "{name}"', 'success')
+    return redirect(url_for('dashboard.index'))
 
 
 @curriculum_bp.route('/projects/new', methods=['GET', 'POST'])

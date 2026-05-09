@@ -46,9 +46,9 @@
               </div>
             </div>
             <div class="flex gap-1 ml-2 flex-shrink-0">
-              <form method="POST" action="/curriculums/{{ c.id }}/delete" onsubmit="return confirm('Archive?')">
+              <form method="POST" action="/curriculums/{{ c.id }}/delete" onsubmit="return confirm('Delete this curriculum? This cannot be undone.')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="text-gray-600 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-gray-800 transition-colors">Archive</button>
+                <button class="text-gray-600 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-gray-800 transition-colors">Delete</button>
               </form>
             </div>
           </div>
@@ -97,9 +97,9 @@
             </div>
           </div>
           <div class="flex gap-1 ml-2 flex-shrink-0">
-            <form method="POST" action="/curriculums/{{ c.id }}/delete" onsubmit="return confirm('Archive?')">
+            <form method="POST" action="/curriculums/{{ c.id }}/delete" onsubmit="return confirm('Delete this curriculum? This cannot be undone.')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="text-gray-600 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-gray-800 transition-colors">Archive</button>
+              <button class="text-gray-600 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-gray-800 transition-colors">Delete</button>
             </form>
           </div>
         </div>

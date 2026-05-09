@@ -19,7 +19,18 @@
     <div class="text-right flex-shrink-0">
       <div class="text-xs text-gray-600 uppercase tracking-widest">logged</div>
       <div class="text-lg font-bold font-mono text-white">{{ '%.1f'|format(project.total_hours) }}h</div>
-      <div class="text-xs text-gray-500">all curricula</div>
+      <div class="text-xs text-gray-500">all curriculums</div>
+      <div class="mt-3 flex justify-end">
+        <form method="POST"
+              action="/projects/{{ project.id }}/delete"
+              onsubmit="return confirm('Delete this project? This cannot be undone. Projects can only be deleted when they have zero curriculums.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+                  class="text-gray-600 hover:text-red-400 text-xs px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors">
+            Delete project
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 </div>
