@@ -5,6 +5,7 @@ from app import db
 from app.models import Curriculum, CurriculumItem, Session, Project
 from app.forms import CurriculumForm, CurriculumItemForm, ProjectForm
 from app.utils.dates import local_today_for_user
+from app.utils.dashboard_view import gather_dashboard_view_context
 from app.utils.stats import get_velocity, get_projected_completion
 
 curriculum_bp = Blueprint('curriculum', __name__)
@@ -166,8 +167,24 @@ def list_projects():
 @login_required
 def project_detail(id):
     project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
-    curricula = project.curricula.filter_by(archived=False).order_by(Curriculum.created_at).all()
-    return render_template('project/detail.html', project=project, curricula=curricula)
+    ctx = gather_dashboard_view_context(current_user, project)
+    return render_template('project/detail.html', project=project, **ctx)
+
+
+@curriculum_bp.route('/projects/<int:id>/curricula/delete-all', methods=['POST'])
+@login_required
+def delete_all_project_curricula(id):
+    project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    currs = project.curricula.all()
+    if not currs:
+        flash('This project has no curriculums.', 'info')
+        return redirect(url_for('curriculum.project_detail', id=id))
+    n = len(currs)
+    for c in currs:
+        db.session.delete(c)
+    db.session.commit()
+    flash(f'Deleted {n} curriculum{"s" if n != 1 else ""} from this project.', 'success')
+    return redirect(url_for('curriculum.project_detail', id=id))
 
 
 @curriculum_bp.route('/projects/<int:id>/delete', methods=['POST'])
@@ -198,7 +215,7 @@ def new_project():
         db.session.add(p)
         db.session.commit()
         flash(f'Created project "{p.name}"', 'success')
-        return redirect(url_for('dashboard.index') + f'?project={p.id}')
+        return redirect(url_for('curriculum.project_detail', id=p.id))
     return render_template('project/new.html', form=form)
 
 
