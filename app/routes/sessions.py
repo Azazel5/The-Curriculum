@@ -7,21 +7,13 @@ from app import db
 from app.models import Session, Curriculum, CurriculumItem
 from app.forms import SessionForm
 from app.utils.dates import local_today_for_user
+from app.utils.session_log import create_time_session, curriculum_has_time_loggable_items
 
 sessions_bp = Blueprint('sessions', __name__)
 
 
 def _curriculum_has_time_loggable_items(cid):
-    """Any active roadmap row can receive direct time logs."""
-    return (
-        db.session.query(CurriculumItem.id)
-        .filter(
-            CurriculumItem.curriculum_id == cid,
-            CurriculumItem.deleted.is_(False),
-        )
-        .first()
-        is not None
-    )
+    return curriculum_has_time_loggable_items(cid)
 
 
 def _item_choices_for_curriculum(cid):
@@ -211,52 +203,29 @@ def log_session():
         _populate_form(form)
 
     if form.validate_on_submit():
-        c = Curriculum.query.filter_by(id=form.curriculum_id.data, user_id=current_user.id).first()
-        if not c or c.archived:
-            flash('Invalid curriculum', 'error')
-            return render_template('sessions/log.html', form=form, curricula=curricula)
-
-        needs_item = _curriculum_has_time_loggable_items(c.id)
-        item_id = None
-        if needs_item:
-            if not form.item_id.data:
-                flash('Select an item to credit the time precisely (recurring or one-time).', 'error')
-                return render_template('sessions/log.html', form=form, curricula=curricula)
-            item = CurriculumItem.query.filter_by(
-                id=form.item_id.data, curriculum_id=c.id, deleted=False
-            ).first()
-            if not item or not item.accepts_time_logging():
-                flash('Invalid item for this curriculum', 'error')
-                return render_template('sessions/log.html', form=form, curricula=curricula)
-            item_id = item.id
-        else:
-            if form.item_id.data:
-                flash('This curriculum has no time-tracked items; log without an item tag.', 'error')
-                return render_template('sessions/log.html', form=form, curricula=curricula)
-
         total_minutes = (form.hours.data or 0) * 60 + (form.minutes.data or 0)
-        if total_minutes <= 0:
-            flash('Duration must be greater than 0', 'error')
-        else:
-            s = Session(
-                curriculum_id=c.id,
-                item_id=item_id,
+        try:
+            _, c = create_time_session(
+                current_user,
+                curriculum_id=form.curriculum_id.data,
+                item_id=form.item_id.data or None,
                 duration_minutes=total_minutes,
                 logged_at=form.logged_at.data or today,
-                note=form.note.data or None,
+                note=form.note.data,
                 source='manual',
             )
-            db.session.add(s)
-            db.session.commit()
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return render_template('sessions/log.html', form=form, curricula=curricula)
 
-            h, m = divmod(total_minutes, 60)
-            dur = f'{h}h {m}m' if h and m else (f'{h}h' if h else f'{m}m')
-            msg = f'Logged {dur} on {c.name}'
-            if item_id:
-                msg += f' (item logged)'
-            flash(msg, 'success')
-            q = {'log_item': item_id} if item_id else {}
-            return redirect(url_for('curriculum.curriculum_detail', id=c.id, **q))
+        h, m = divmod(total_minutes, 60)
+        dur = f'{h}h {m}m' if h and m else (f'{h}h' if h else f'{m}m')
+        msg = f'Logged {dur} on {c.name}'
+        if form.item_id.data:
+            msg += ' (item logged)'
+        flash(msg, 'success')
+        q = {'log_item': form.item_id.data} if form.item_id.data else {}
+        return redirect(url_for('curriculum.curriculum_detail', id=c.id, **q))
 
     return render_template('sessions/log.html', form=form, curricula=curricula)
 

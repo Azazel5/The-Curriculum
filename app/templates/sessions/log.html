@@ -19,7 +19,7 @@
 
   {# ── Manual entry ──────────────────────────────────────────────────────── #}
   <div id="panel-manual" class="hidden">
-    <form method="POST" action="/log" class="space-y-5">
+    <form id="manual-log-form" method="POST" action="/log" class="space-y-5">
       {{ form.hidden_tag() }}
 
       <div>
@@ -83,10 +83,11 @@
         {{ form.note(class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors", placeholder="What did you work on?") }}
       </div>
 
-      <button type="submit"
-              class="w-full bg-green-600 hover:bg-green-500 text-white py-3.5 rounded-xl font-bold text-base transition-colors shadow-lg shadow-green-900/40">
+      <button type="submit" id="manual-log-submit"
+              class="w-full bg-green-600 hover:bg-green-500 text-white py-3.5 rounded-xl font-bold text-base transition-colors shadow-lg shadow-green-900/40 disabled:opacity-50 disabled:cursor-not-allowed">
         Log It
       </button>
+      <p id="manual-log-error" class="hidden text-sm text-red-400"></p>
     </form>
   </div>
 
@@ -182,6 +183,53 @@
   const url = new URL(window.location.href);
   const paramCurriculumId = url.searchParams.get('curriculum');
   const paramItemId = url.searchParams.get('item');
+  const preferManualTab = Boolean(paramItemId);
+
+  document.getElementById('manual-log-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const errEl = document.getElementById('manual-log-error');
+    const btn = document.getElementById('manual-log-submit');
+    errEl.classList.add('hidden');
+    errEl.textContent = '';
+
+    const curriculumId = form.querySelector('[name="curriculum_id"]')?.value;
+    if (!curriculumId) {
+      errEl.textContent = 'Select a curriculum.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/sessions/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          curriculum_id: parseInt(curriculumId, 10),
+          item_id: form.querySelector('[name="item_id"]')?.value || null,
+          hours: parseInt(form.querySelector('[name="hours"]')?.value || '0', 10),
+          minutes: parseInt(form.querySelector('[name="minutes"]')?.value || '0', 10),
+          logged_at: form.querySelector('[name="logged_at"]')?.value || null,
+          note: form.querySelector('[name="note"]')?.value || '',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        errEl.textContent = data.error || 'Could not save. Try again.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      let dest = `/curriculums/${data.curriculum_id}`;
+      if (data.item_id) dest += `?log_item=${data.item_id}`;
+      window.location = dest;
+    } catch {
+      errEl.textContent = 'Network error. Check your connection and try again.';
+      errEl.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   document.getElementById('manual-curriculum').addEventListener('change', function() {
     loadItems(this.value, document.getElementById('manual-item'));
@@ -205,15 +253,13 @@
       const tItem = document.getElementById('timer-item');
       const hasParams = Boolean(paramCurriculumId || paramItemId);
 
-      // If we arrive with ?item=... or ?curriculum=..., we want Stopwatch as the default
-      // and we should prefill the timer selects too.
       if (hasParams && tCurr && tItem) {
         if (paramCurriculumId) tCurr.value = String(paramCurriculumId);
         else if (tCurr.value) tCurr.value = String(tCurr.value);
         loadItems(tCurr.value, tItem).then(() => {
           if (paramItemId) tItem.value = String(paramItemId);
         });
-        switchTab('timer');
+        switchTab(preferManualTab ? 'manual' : 'timer');
         return;
       }
 

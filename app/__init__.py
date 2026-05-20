@@ -2,7 +2,7 @@ import os
 from flask import Flask, jsonify, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_mail import Mail
 from flask_login import LoginManager
 
@@ -32,6 +32,15 @@ def create_app(config_class=None):
     db.init_app(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        from flask import flash
+        flash('Your session expired. Refresh the page and try again.', 'error')
+        if request.path == '/log' or (request.referrer and '/log' in request.referrer):
+            return redirect(url_for('sessions.log_session', **request.args))
+        return redirect(request.referrer or url_for('dashboard.index'))
+
     mail.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'

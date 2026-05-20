@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import Session, Curriculum, CurriculumItem
 from app.utils.dates import local_today_for_user
+from app.utils.session_log import create_time_session, curriculum_has_time_loggable_items
 from app.utils.stats import get_heatmap_data, get_velocity, get_projected_completion
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -33,16 +34,7 @@ def heatmap_curriculum(curriculum_id):
 
 
 def _curriculum_requires_time_item(cid):
-    """Timer/API requires item selection whenever active roadmap rows exist."""
-    return (
-        CurriculumItem.query
-        .filter(
-            CurriculumItem.curriculum_id == cid,
-            CurriculumItem.deleted.is_(False),
-        )
-        .first()
-        is not None
-    )
+    return curriculum_has_time_loggable_items(cid)
 
 
 @api_bp.route('/items')
@@ -70,6 +62,43 @@ def items():
         ),
     )
     return jsonify([{'id': i.id, 'title': i.title} for i in rows if i.accepts_time_logging()])
+
+
+@api_bp.route('/sessions/manual', methods=['POST'])
+@login_required
+def log_manual():
+    """Manual log form — JSON POST, CSRF-exempt (same as timer)."""
+    data = request.get_json(silent=True) or {}
+    curriculum_id = data.get('curriculum_id')
+    if not curriculum_id:
+        return jsonify({'error': 'Select a curriculum'}), 400
+    hours = int(data.get('hours') or 0)
+    minutes = int(data.get('minutes') or 0)
+    duration_minutes = hours * 60 + minutes
+    item_id = data.get('item_id')
+    if item_id in ('', None, 0, '0'):
+        item_id = None
+    try:
+        session, curriculum = create_time_session(
+            current_user,
+            curriculum_id=curriculum_id,
+            item_id=item_id,
+            duration_minutes=duration_minutes,
+            logged_at=data.get('logged_at') or data.get('date'),
+            note=data.get('note'),
+            source='manual',
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({
+        'status': 'ok',
+        'session_id': session.id,
+        'curriculum_id': curriculum.id,
+        'item_id': session.item_id,
+        'total_hours': round(curriculum.total_hours, 2),
+        'progress_pct': round(curriculum.progress_pct, 1),
+    })
 
 
 @api_bp.route('/sessions/stop', methods=['POST'])
@@ -110,28 +139,25 @@ def stop_timer():
         item_id = None
 
     try:
-        logged_at = date.fromisoformat(client_date) if client_date else local_today_for_user(current_user)
-    except ValueError:
-        logged_at = local_today_for_user(current_user)
-
-    s = Session(
-        curriculum_id=curriculum_id,
-        item_id=item_id,
-        duration_minutes=int(duration_minutes),
-        logged_at=logged_at,
-        note=note,
-        source='timer',
-    )
-    db.session.add(s)
-    db.session.commit()
+        session, curriculum = create_time_session(
+            current_user,
+            curriculum_id=curriculum_id,
+            item_id=item_id,
+            duration_minutes=int(duration_minutes),
+            logged_at=client_date,
+            note=note,
+            source='timer',
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
 
     return jsonify({
         'status': 'ok',
-        'session_id': s.id,
+        'session_id': session.id,
         'total_hours': round(curriculum.total_hours, 2),
         'progress_pct': round(curriculum.progress_pct, 1),
         'curriculum_id': curriculum.id,
-        'item_id': item_id,
+        'item_id': session.item_id,
     })
 
 

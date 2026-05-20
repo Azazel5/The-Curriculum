@@ -38,6 +38,8 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = _db_engine_options
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     WTF_CSRF_ENABLED = True
+    # Log page is often left open; avoid 400 "CSRF token has expired" on submit.
+    WTF_CSRF_TIME_LIMIT = 60 * 60 * 24 * 7
 
     MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
     MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
