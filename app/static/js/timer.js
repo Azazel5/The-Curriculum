@@ -15,7 +15,12 @@ function timerSetState(s) {
 function timerElapsed() {
   const s = timerGetState();
   if (!s) return 0;
-  return s.running ? Math.floor((Date.now() - s.start_ms) / 1000) : (s.paused_seconds || 0);
+  if (s.running) {
+    const elapsed = Math.floor((Date.now() - Number(s.start_ms)) / 1000);
+    return Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+  }
+  const paused = Number(s.paused_seconds);
+  return Number.isFinite(paused) ? Math.max(0, paused) : 0;
 }
 function fmtTime(secs) {
   const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
@@ -36,7 +41,7 @@ function updateNavIndicator() {
   const el = document.getElementById('nav-timer-indicator');
   const display = document.getElementById('nav-timer-display');
   if (!el || !display) return;
-  if (state && (state.running || state.paused_seconds > 0)) {
+  if (state && (state.running || state.paused_seconds != null)) {
     el.classList.remove('hidden'); el.classList.add('flex');
     display.textContent = fmtTime(timerElapsed());
   } else {
@@ -54,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('timer-start');
   const pauseBtn = document.getElementById('timer-pause');
   const stopBtn  = document.getElementById('timer-stop');
+  const resetBtn = document.getElementById('timer-reset');
   const noteEl   = document.getElementById('timer-note');
   const confirmEl = document.getElementById('timer-confirm');
   const currSel  = document.getElementById('timer-curriculum');
@@ -64,10 +70,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function tick() { display.textContent = fmtTime(timerElapsed()); }
 
   function applyUI(state) {
-    if (!state || (!state.running && !state.paused_seconds)) {
+    if (!state || (!state.running && state.paused_seconds == null)) {
       startBtn.textContent = 'Start'; startBtn.classList.remove('hidden');
       if (pauseBtn) pauseBtn.classList.add('hidden');
       if (stopBtn)  stopBtn.classList.add('hidden');
+      if (resetBtn) resetBtn.classList.add('hidden');
       if (currSel) currSel.disabled = false;
       if (itemSel) itemSel.disabled = false;
       display.textContent = '00:00:00';
@@ -75,12 +82,14 @@ document.addEventListener('DOMContentLoaded', () => {
       startBtn.classList.add('hidden');
       if (pauseBtn) pauseBtn.classList.remove('hidden');
       if (stopBtn)  stopBtn.classList.remove('hidden');
+      if (resetBtn) resetBtn.classList.remove('hidden');
       if (currSel) currSel.disabled = true;
       if (itemSel) itemSel.disabled = true;
     } else {
       startBtn.textContent = 'Resume'; startBtn.classList.remove('hidden');
       if (pauseBtn) pauseBtn.classList.add('hidden');
       if (stopBtn)  stopBtn.classList.remove('hidden');
+      if (resetBtn) resetBtn.classList.remove('hidden');
       if (currSel) currSel.disabled = true;
       if (itemSel) itemSel.disabled = true;
     }
@@ -113,7 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
       item_id:         (itemSel && itemSel.value && itemSel.value !== '0') ? parseInt(itemSel.value) : null,
       start_ms:        Date.now() - resumeSecs * 1000,
       running:         true,
-      paused_seconds:  0
+      paused_seconds:  0,
+      started_date:    prev && prev.started_date ? prev.started_date : localDateString()
     });
     clearInterval(tickInterval);
     tickInterval = setInterval(tick, 1000);
@@ -144,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
           item_id: state.item_id || null,
           duration_minutes,
           note: noteEl ? noteEl.value : '',
-          date: localDateString()
+          date: state.started_date || localDateString()
         })
       });
       if (res.ok) {
@@ -156,5 +166,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } else { alert('Failed to save. Try logging manually.'); }
     } catch { alert('Network error. Try logging manually.'); }
+  });
+
+  if (resetBtn) resetBtn.addEventListener('click', () => {
+    if (!timerGetState() || !confirm('Reset this timer without logging it?')) return;
+    clearInterval(tickInterval);
+    timerSetState(null);
+    applyUI(null);
   });
 });

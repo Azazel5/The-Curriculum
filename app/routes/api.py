@@ -111,7 +111,11 @@ def stop_timer():
     item_id = data.get('item_id')
     client_date = data.get('date')
 
-    if not duration_minutes or int(duration_minutes) <= 0:
+    try:
+        duration_minutes = int(duration_minutes)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Duration must be greater than 0'}), 400
+    if duration_minutes <= 0:
         return jsonify({'error': 'Invalid data'}), 400
 
     item = None
@@ -143,7 +147,7 @@ def stop_timer():
             current_user,
             curriculum_id=curriculum_id,
             item_id=item_id,
-            duration_minutes=int(duration_minutes),
+            duration_minutes=duration_minutes,
             logged_at=client_date,
             note=note,
             source='timer',
